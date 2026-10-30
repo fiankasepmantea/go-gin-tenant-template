@@ -1,0 +1,10 @@
+# Prevents Gemini CLI from reading secrets (same syntax as .gitignore)
+.env
+.env.*
+!.env.*.example
+*.env
+*.pem
+*.p12
+*.pfx
+secrets/
+*.tfvars

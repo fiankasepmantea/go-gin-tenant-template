@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Rejects commits that contain env files or private keys. *.example files are allowed.
+# Enable once per clone:  make hooks
+set -euo pipefail
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+bad="$(printf '%s\n' "$staged" \
+  | grep -E '(^|/)\.env($|\.)|\.(pem|p12|pfx)$|(^|/)id_(rsa|ed25519)$' \
+  | grep -vE '\.example$' || true)"
+
+if [ -n "$bad" ]; then
+  echo "COMMIT REJECTED: the following files contain secrets and must not be committed:" >&2
+  printf '  %s\n' $bad >&2
+  echo "Remove from staging:  git restore --staged <file>" >&2
+  exit 1
+fi

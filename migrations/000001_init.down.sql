@@ -1,0 +1,3 @@
+DROP FUNCTION IF EXISTS set_updated_at();
+DROP FUNCTION IF EXISTS app_level();
+DROP FUNCTION IF EXISTS app_tenant();

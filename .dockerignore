@@ -1,0 +1,11 @@
+.git
+.github
+.vscode
+.env
+.env.*
+!.env.example
+bin
+coverage.*
+docs
+deployments
+*.md

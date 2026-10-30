@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenant-api-config
+data:
+  APP_ENV: production
+  APP_PORT: "8080"
+  LOG_LEVEL: info
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: tenantdb
+  DB_SCHEMA: public
+  DB_SSLMODE: require
+  TOKEN_ISSUER: go-gin-tenant-template
+  ACCESS_TOKEN_TTL: 15m
+  REFRESH_TOKEN_TTL: 720h
+  TENANT_HEADER: X-Tenant-Code

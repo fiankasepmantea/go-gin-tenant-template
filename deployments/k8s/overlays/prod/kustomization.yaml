@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tenant-prod
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/fiankasepmantea/go-gin-tenant-template
+    newTag: v0.1.0   # replaced by the release pipeline

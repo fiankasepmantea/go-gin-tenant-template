@@ -1,0 +1,86 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.25.x"
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./... -race -count=1
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.25.x"
+      - run: go test -tags integration ./test/integration/... -race -count=1
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.25.x"
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.25.x"
+      # Intentionally @latest: the vulnerability database must always be current.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  env-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Env files must not be committed (except *.example)
+        run: |
+          bad=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.example$' || true)
+          if [ -n "$bad" ]; then
+            echo "Committed env files:"; echo "$bad"; exit 1
+          fi
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deployments/docker/Dockerfile
+          push: false

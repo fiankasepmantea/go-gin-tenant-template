@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "test", "type": "shell", "command": "make test", "group": "test", "problemMatcher": "$go" },
+    { "label": "lint", "type": "shell", "command": "make lint", "problemMatcher": "$go" },
+    { "label": "docker-up", "type": "shell", "command": "make docker-up", "problemMatcher": [] },
+    { "label": "docker-down", "type": "shell", "command": "make docker-down", "problemMatcher": [] }
+  ]
+}

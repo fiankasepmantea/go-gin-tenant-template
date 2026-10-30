@@ -1,0 +1,65 @@
+# Local environment (development mode). Run with:  make env-init && make docker-up
+# ${...} values are read from .env.development via --env-file (set in the Makefile).
+# Optional services use profiles:  make docker-up PROFILES="kafka rabbitmq app"
+name: go-gin-tenant-template
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-tenantdb}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---- optional: phase 5 (messaging) ----
+  rabbitmq:
+    profiles: ["rabbitmq"]
+    image: rabbitmq:4-management-alpine
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_UI_PORT:-15672}:15672"
+
+  kafka:
+    profiles: ["kafka"]
+    image: apache/kafka:4.0.0
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+
+  # ---- optional: the application as a container ----
+  app:
+    profiles: ["app"]
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    env_file: ../../.env.development
+    environment:
+      DB_HOST: postgres
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:

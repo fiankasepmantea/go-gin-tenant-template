@@ -1,0 +1,36 @@
+openapi: 3.0.3
+info:
+  title: go-gin-tenant-template API
+  version: 0.1.0
+  description: REST API contract. Extended as each new module is added.
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      tags: [ops]
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+  /readyz:
+    get:
+      summary: Readiness probe (database reachable)
+      tags: [ops]
+      responses:
+        "200":
+          description: Ready to accept traffic
+        "503":
+          description: Not ready
+components:
+  securitySchemes:
+    pasetoBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: PASETO v4.local

@@ -1,0 +1,30 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard        # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose            # response body must be closed
+    - errorlint            # errors.Is/As, %w
+    - gosec                # insecure code patterns
+    - misspell
+    - noctx                # HTTP requests must carry a context
+    - nolintlint           # //nolint must have a reason
+    - sloglint             # consistent use of log/slog
+    - unconvert
+    - unparam
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/fiankasepmantea/go-gin-tenant-template

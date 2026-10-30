@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Server (REST)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/server",
+      "env": { "APP_ENV": "development" },
+      "envFile": "${workspaceFolder}/.env.development"
+    },
+    {
+      "name": "Server (REST, local production)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/server",
+      "env": { "APP_ENV": "production" },
+      "envFile": "${workspaceFolder}/.env.production"
+    },
+    {
+      "name": "CLI (tenantctl)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/cli",
+      "args": ["version"]
+    },
+    {
+      "name": "Test: current package",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${fileDirname}"
+    }
+  ]
+}

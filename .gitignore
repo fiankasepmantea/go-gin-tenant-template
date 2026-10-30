@@ -1,0 +1,53 @@
+# ======================== SECRETS ========================
+# All env files are ignored. Only *.example (with no secret values) may be committed.
+.env
+.env.*
+!.env.*.example
+*.env
+.envrc
+
+# Keys and certificates
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+secrets/
+*.secret
+*.secret.*
+secret.yaml
+!secret.example.yaml
+*.tfvars
+
+# ======================== BUILD / GO ========================
+/bin/
+/build/
+*.exe
+*.test
+*.out
+go.work
+go.work.sum
+coverage.*
+
+# ======================== MISC ========================
+*.log
+*.db
+*.sqlite
+
+# Editor: keep only the configuration shared with the team
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.swp
+
+# AI assistant: personal local settings are not shared, team rules (settings.json) are shared
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+*Zone.Identifier
