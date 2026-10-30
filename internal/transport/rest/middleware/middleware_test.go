@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -24,14 +25,14 @@ func TestRequestID_GeneratesAndEchoes(t *testing.T) {
 	r := newEngine(RequestID())
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ping", nil))
+	r.ServeHTTP(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ping", nil))
 	id := w.Header().Get(HeaderRequestID)
 	if id == "" || w.Body.String() != id {
 		t.Fatalf("header=%q body=%q", id, w.Body.String())
 	}
 
 	w = httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ping", nil)
 	req.Header.Set(HeaderRequestID, "from-client")
 	r.ServeHTTP(w, req)
 	if got := w.Header().Get(HeaderRequestID); got != "from-client" {
@@ -42,7 +43,7 @@ func TestRequestID_GeneratesAndEchoes(t *testing.T) {
 func TestRequestID_RejectsOversized(t *testing.T) {
 	r := newEngine(RequestID())
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ping", nil)
 	req.Header.Set(HeaderRequestID, strings.Repeat("x", 500))
 	r.ServeHTTP(w, req)
 	if got := w.Header().Get(HeaderRequestID); len(got) > 128 {
@@ -55,9 +56,9 @@ func TestAccessLog(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(&buf, nil))
 	r := newEngine(RequestID(), AccessLog(log))
 
-	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ping", nil))
-	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/boom", nil))
-	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/nope", nil))
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ping", nil))
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/boom", nil))
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/nope", nil))
 
 	out := buf.String()
 	for _, want := range []string{`"route":"/ping"`, `"level":"ERROR"`, `"status":500`, `"route":"unmatched"`, `"level":"WARN"`} {
