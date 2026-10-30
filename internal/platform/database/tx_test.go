@@ -11,7 +11,7 @@ import (
 
 // Validation happens before touching the database, so a nil db is safe here.
 func TestInTenantTx_Validation(t *testing.T) {
-	called := func(context.Context) error { t.Error("fn must not be called"); return nil }
+	called := func(context.Context) error { t.Error("fn must not be called"); return errors.New("unexpected call") }
 
 	tests := []struct {
 		name  string

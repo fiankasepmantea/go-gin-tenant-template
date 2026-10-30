@@ -1,7 +1,7 @@
 package rest
 
 import (
-	"io"
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -11,13 +11,13 @@ import (
 )
 
 func testRouter() http.Handler {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	return NewRouter(&config.Config{Env: "testing"}, log, nil)
 }
 
 func TestHealthz(t *testing.T) {
 	w := httptest.NewRecorder()
-	testRouter().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	testRouter().ServeHTTP(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
@@ -29,7 +29,7 @@ func TestHealthz(t *testing.T) {
 
 func TestReadyz_WithoutDatabase(t *testing.T) {
 	w := httptest.NewRecorder()
-	testRouter().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	testRouter().ServeHTTP(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/readyz", nil))
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503 when the database is absent", w.Code)

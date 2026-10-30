@@ -28,7 +28,7 @@ func newVersionCmd() *cobra.Command {
 		Short: "Show the build version",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			fmt.Fprintf(cmd.OutOrStdout(), "version=%s commit=%s built=%s\n",
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "version=%s commit=%s built=%s\n",
 				version.Version, version.Commit, version.BuildDate)
 		},
 	}
@@ -40,7 +40,7 @@ func newKeygenCmd() *cobra.Command {
 		Short: "Generate a new PASETO v4 key for PASETO_KEY",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			fmt.Fprintln(cmd.OutOrStdout(), auth.GenerateKeyHex())
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), auth.GenerateKeyHex())
 		},
 	}
 }

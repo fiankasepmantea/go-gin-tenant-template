@@ -47,7 +47,7 @@ func TestNormalizeCode(t *testing.T) {
 }
 
 func newReq(host string, headers map[string]string) *http.Request {
-	r := httptest.NewRequest(http.MethodPost, "http://"+host+"/login", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://"+host+"/login", nil)
 	r.Host = host
 	for k, v := range headers {
 		r.Header.Set(k, v)
