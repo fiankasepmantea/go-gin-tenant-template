@@ -14,3 +14,15 @@ if [ -n "$bad" ]; then
   echo "Remove from staging:  git restore --staged <file>" >&2
   exit 1
 fi
+
+# Content scan for leaked credentials (API keys, tokens, private keys) with gitleaks.
+# Install: https://github.com/gitleaks/gitleaks#installing  (CI runs it too, so it cannot be skipped there).
+if command -v gitleaks >/dev/null 2>&1; then
+  if gitleaks git --help >/dev/null 2>&1; then
+    gitleaks git --pre-commit --staged --redact --no-banner --config .gitleaks.toml
+  else
+    gitleaks protect --staged --redact --no-banner --config .gitleaks.toml
+  fi
+else
+  echo "warning: gitleaks is not installed, content scan skipped (CI will still scan)." >&2
+fi

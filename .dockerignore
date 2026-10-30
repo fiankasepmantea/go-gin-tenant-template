@@ -9,3 +9,4 @@ coverage.*
 docs
 deployments
 *.md
+*Zone.Identifier

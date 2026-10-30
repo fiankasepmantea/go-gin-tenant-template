@@ -49,5 +49,6 @@ coverage.*
 # OS
 .DS_Store
 Thumbs.db
+# Windows/WSL download marker files (created when a file is downloaded in Windows)
 *:Zone.Identifier
 *Zone.Identifier

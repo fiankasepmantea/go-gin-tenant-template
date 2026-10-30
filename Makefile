@@ -19,7 +19,7 @@ help: ## Show the list of commands
 env-init: ## Create .env.$(ENV) from the example + a new PASETO_KEY (never overwrites)
 	@scripts/init-env.sh $(ENV)
 
-hooks: ## Enable the git hook that rejects commits of env files
+hooks: ## Enable the git hook (blocks env files/keys, runs gitleaks if installed)
 	git config core.hooksPath scripts/hooks
 
 run: ## Run the REST server for ENV (needs .env.$(ENV))

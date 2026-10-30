@@ -1,0 +1,11 @@
+# gitleaks configuration: default rules plus an allowlist for template placeholders.
+title = "go-gin-tenant-template"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Example env files hold placeholders only"
+paths = [
+  '''\.env\.[a-z]+\.example$''',
+]
