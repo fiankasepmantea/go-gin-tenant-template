@@ -7,7 +7,7 @@
 - Primary key: `idgen.New()` (UUID v7, berurutan). Refresh token: `idgen.NewOpaqueToken()`.
 - `context.Context` argumen pertama. Error dibungkus `%w`, dibandingkan dengan `errors.Is/As`.
 - Log pakai `slog` key-value. Jangan mencatat password, token, atau `PASETO_KEY`.
-- Dependency baru: baris `go` di go.mod-nya harus <= 1.25.0, lalu catat di `docs/libraries.md`.
+- Dependency baru: baris `go` di go.mod-nya harus <= 1.26.0, lalu catat di `docs/libraries.md`.
 - Test table-driven. Perilaku baru = test baru. `make test-race` harus hijau.
 - Tanpa `log.Fatal`/`panic` di luar `main`; tanpa `init()` berefek samping.
 
@@ -18,6 +18,6 @@
 
 ## Dilarang
 
-- Menambah dependency yang butuh Go > 1.25.0 tanpa persetujuan pemilik repo.
+- Menambah dependency yang butuh Go > 1.26.0 tanpa persetujuan pemilik repo.
 - Meng-commit `go.work`, hasil build, atau file rahasia.
 - Mengubah migration yang sudah pernah diterapkan. Buat migration baru.

@@ -2,10 +2,10 @@
 
 ## Go version policy
 
-- `go.mod` uses **`go 1.25.0`**: the minimum version required by the dependencies (gin v1.12.0, driver postgres gorm v1.6.3, pgx v5.11.0).
+- `go.mod` uses **`go 1.26.0`**: golang.org/x/net v0.60.0 (HTTP/2 security fixes) requires Go 1.26. The other dependencies (gin v1.12.0, gorm postgres driver v1.6.3, pgx v5.11.0) only need 1.25.0.
   According to the [toolchain documentation](https://go.dev/doc/toolchain) the `go` line is the minimum version.
-- Development and CI use the latest patch release of the 1.25 series (`1.25.x`) for security fixes.
-- Do not move to Go 1.26 just because a library's latest version requires it; pin to the last version that still supports 1.25.
+- Development and CI use the latest patch release of the 1.26 series (`1.26.x`) for security fixes.
+- Do not raise the minimum Go version only for convenience; raise it for a security fix (as done for x/net v0.60.0) or when a needed library requires it, and record the reason here and in the ADR.
 
 ## Currently used (in go.mod)
 
@@ -19,9 +19,9 @@
 | `github.com/spf13/cobra` | v1.10.2 | CLI |
 | `log/slog` | stdlib | Structured logging |
 
-## Pins for upcoming phases (last versions compatible with Go 1.25)
+## Pins for upcoming phases (versions checked against Go 1.25; all still work on 1.26)
 
-| Library | Use | Do not use (needs Go 1.26) |
+| Library | Use | Latest (not adopted yet) |
 |---|---|---|
 | `google.golang.org/grpc` | v1.84.0 | v1.85.0 |
 | `google.golang.org/protobuf` | v1.36.12 | |
@@ -45,5 +45,5 @@ Intentional differences: PASETO v4 replaces `o1egl/paseto` v1.0.0 (last commit 2
 ## How to update
 
 1. `go list -m -u all` to see new versions.
-2. Check the `go` line in that library's `go.mod`; if > 1.25.0, hold back.
+2. Check the `go` line in that library's `go.mod`; if > 1.26.0, hold back.
 3. `go get <modul>@<versi> && go mod tidy && make test && make vuln`.

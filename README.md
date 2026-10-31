@@ -16,7 +16,7 @@ Analogy: one application = one apartment building, each tenant = one resident (a
 
 ## Prerequisites
 
-Go ≥ 1.25.0 (see [docs/libraries.md](docs/libraries.md)), Docker, `make`.
+Go ≥ 1.26.0 (see [docs/libraries.md](docs/libraries.md)), Docker, `make`.
 Developed on Linux/WSL.
 
 ## Quick start

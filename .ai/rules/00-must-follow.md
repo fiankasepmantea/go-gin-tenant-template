@@ -7,7 +7,7 @@
 - Primary key: `idgen.New()` (UUID v7, sequential). Refresh token: `idgen.NewOpaqueToken()`.
 - `context.Context` is the first argument. Errors are wrapped with `%w` and compared with `errors.Is/As`.
 - Log with `slog` key-value. Do not log passwords, tokens, or `PASETO_KEY`.
-- New dependency: the `go` line in its go.mod must be <= 1.25.0, then record it in `docs/libraries.md`.
+- New dependency: the `go` line in its go.mod must be <= 1.26.0, then record it in `docs/libraries.md`.
 - Table-driven tests. New behavior = new tests. `make test-race` must be green.
 - No `log.Fatal`/`panic` outside `main`; no `init()` with side effects.
 
@@ -18,6 +18,6 @@
 
 ## Prohibited
 
-- Adding a dependency that requires Go > 1.25.0 without the repo owner's approval.
+- Adding a dependency that requires Go > 1.26.0 without the repo owner's approval.
 - Committing `go.work`, build outputs, or secret files.
 - Modifying a migration that has already been applied. Create a new migration.
