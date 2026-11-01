@@ -17,6 +17,8 @@
 | `github.com/google/uuid` | v1.6.0 | `NewV7()` for sequential primary keys |
 | `github.com/joho/godotenv` | v1.5.1 | Reads `.env` (used in all previous Go repos) |
 | `github.com/spf13/cobra` | v1.10.2 | CLI |
+| `golang.org/x/crypto` | v0.48.0 | `argon2` for password hashing (argon2id). Already a transitive dependency of go-paseto |
+| `github.com/jackc/pgx/v5` | v5.10.0 | Used directly only for `pgconn.PgError` (unique violation 23505 in the CLI); otherwise via the gorm driver |
 | `log/slog` | stdlib | Structured logging |
 
 ## Pins for upcoming phases (versions checked against Go 1.25; all still work on 1.26)

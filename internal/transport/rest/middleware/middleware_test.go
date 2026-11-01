@@ -10,6 +10,9 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/auth"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 )
 
 func newEngine(mw ...gin.HandlerFunc) *gin.Engine {
@@ -65,5 +68,64 @@ func TestAccessLog(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("log does not contain %s:\n%s", want, out)
 		}
+	}
+}
+
+type stubParser struct {
+	claims *auth.Claims
+	err    error
+}
+
+func (s stubParser) Parse(string) (*auth.Claims, error) { return s.claims, s.err }
+
+func TestAuthenticate_SetsTenantFromTheToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tenantID := "0191a000-0000-7000-8000-000000000001"
+	tests := []struct {
+		name       string
+		claims     *auth.Claims
+		wantTenant string
+	}{
+		{"tenant token", &auth.Claims{UserID: "u", TenantID: tenantID, TokenID: "t", Level: auth.LevelTenant}, tenantID},
+		{"platform token has no tenant", &auth.Claims{UserID: "u", TokenID: "t", Level: auth.LevelPlatform}, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotTenant string
+			r := gin.New()
+			r.GET("/x", Authenticate(stubParser{claims: tc.claims}), func(c *gin.Context) {
+				gotTenant, _ = tenant.IDFrom(c.Request.Context())
+				c.Status(http.StatusNoContent)
+			})
+
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
+			req.Header.Set("Authorization", "bearer abc") // the scheme is case-insensitive
+			req.Header.Set(tenant.DefaultHeader, "someone-elses-tenant")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != http.StatusNoContent {
+				t.Fatalf("status = %d", w.Code)
+			}
+			if gotTenant != tc.wantTenant {
+				t.Errorf("tenant in context = %q, want %q (the header must never be used)", gotTenant, tc.wantTenant)
+			}
+		})
+	}
+}
+
+func TestAuthenticate_RejectsInvalidToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	r := gin.New()
+	r.GET("/x", Authenticate(stubParser{err: auth.ErrInvalidToken}), func(c *gin.Context) { called = true })
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
+	req.Header.Set("Authorization", "Bearer abc")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized || called {
+		t.Errorf("status=%d handlerCalled=%v", w.Code, called)
 	}
 }
