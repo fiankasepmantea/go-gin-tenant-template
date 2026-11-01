@@ -11,7 +11,8 @@ Check items off when done. Order = order of work.
 - [x] Migrations: tenants, users, groups, endpoints, group_endpoints, user_tokens, app_versions
 - [x] Decision: platform admin in `users` with tenant_id NULL (ADR 0002)
 - [x] Generic tenant-aware `core.Repository[T]` (hooks added when needed)
-- [ ] Login/refresh/logout, RBAC middleware with endpoint whitelist
+- [x] Login/refresh/logout, argon2id, `middleware.Authenticate`, CLI to create the first tenant/user/admin
+- [ ] RBAC middleware with endpoint whitelist
 - [ ] gRPC `AuthService` (Validate/Authorize)
 
 ## Phase 3 - Generator

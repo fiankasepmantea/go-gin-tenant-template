@@ -14,9 +14,13 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
 )
 
-// NewRouter creates a router with the base middleware and health endpoints.
-// Business modules register their own routes in a later phase.
-func NewRouter(cfg *config.Config, log *slog.Logger, db *gorm.DB) *gin.Engine {
+// Module is a business module that registers its own routes under /api/v1.
+type Module interface {
+	RegisterRoutes(rg *gin.RouterGroup)
+}
+
+// NewRouter creates a router with the base middleware, the health endpoints and the routes of the given modules.
+func NewRouter(cfg *config.Config, log *slog.Logger, db *gorm.DB, modules ...Module) *gin.Engine {
 	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -37,6 +41,11 @@ func NewRouter(cfg *config.Config, log *slog.Logger, db *gorm.DB) *gin.Engine {
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ready"})
 	})
+
+	api := r.Group("/api/v1")
+	for _, m := range modules {
+		m.RegisterRoutes(api)
+	}
 
 	return r
 }

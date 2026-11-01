@@ -49,6 +49,34 @@ func (r *Repository) FindPlatformByUsername(ctx context.Context, username string
 	return u, nil
 }
 
+// FindPlatformByID looks up a platform admin by id. Same rules as FindPlatformByUsername.
+func (r *Repository) FindPlatformByID(ctx context.Context, id string) (*User, error) {
+	u := new(User)
+	err := database.From(ctx, r.db).
+		Where("tenant_id IS NULL AND user_id = ?", id).Take(u).Error
+	if err != nil {
+		return nil, notFound(err)
+	}
+	return u, nil
+}
+
+// SetPasswordHash replaces the password hash of a user (used to upgrade a hash to stronger parameters).
+// A tenant user is updated inside the tenant from the context; a platform admin needs a platform-level session.
+func (r *Repository) SetPasswordHash(ctx context.Context, u *User, hash string) error {
+	if u.Level == auth.LevelPlatform {
+		res := database.From(ctx, r.db).Model(&User{}).
+			Where("tenant_id IS NULL AND user_id = ?", u.ID).Update("password_hash", hash)
+		if res.Error != nil {
+			return fmt.Errorf("users: set password hash: %w", res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return core.ErrNotFound
+		}
+		return nil
+	}
+	return r.Update(ctx, u.ID, map[string]any{"password_hash": hash})
+}
+
 // CreatePlatform creates a platform admin. It only succeeds in a platform-level session (guarded by RLS and a database CHECK).
 func (r *Repository) CreatePlatform(ctx context.Context, u *User) error {
 	u.ID = idgen.New()

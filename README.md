@@ -10,7 +10,8 @@ Analogy: one application = one apartment building, each tenant = one resident (a
 | 0–2 | Foundation: config, logger, UUID v7, PASETO v4, tenant resolver, DB connection, health check, basic CLI | **Done** |
 | 3 | Core tables and migrations, two admin levels, RLS | **Done** (tested on PostgreSQL) |
 | 4 | Generic tenant-aware `core.Repository`, tenant transactions | **Done** (integration tests) |
-| 5 | Login and refresh token, RBAC, gRPC `AuthService`, `BaseHandler` | Next |
+| 5a | Login, refresh-token rotation, logout, `/auth/me`, CLI to create tenants/users/admins ([docs](docs/authentication.md)) | **Done** (unit + integration tests) |
+| 5b | RBAC middleware with endpoint whitelist, gRPC `AuthService`, `BaseHandler` | Next |
 | 2b | `make:module`, `make:migration` generators | Not yet |
 | 5–7 | Kafka/RabbitMQ, advanced Kubernetes, observability, Swagger | Base files exist, logic not yet |
 
@@ -29,6 +30,8 @@ go mod tidy                 # first time: downloads dependencies & creates go.su
 make test
 make run                    # development mode, http://localhost:8080/healthz
 ```
+
+Create the first tenant and user, then log in: see [docs/authentication.md](docs/authentication.md).
 
 ## Structure
 

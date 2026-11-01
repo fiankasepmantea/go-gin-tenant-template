@@ -12,9 +12,16 @@ import (
 	"time"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/config"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/session"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/tenant"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/user"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/auth"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/logger"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
+	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/version"
 )
 
@@ -47,9 +54,38 @@ func run() error {
 		}
 	}()
 
+	tokens, err := auth.NewManager(cfg.Auth.PasetoKeyHex, cfg.Auth.Issuer, cfg.Auth.AccessTTL)
+	if err != nil {
+		return err
+	}
+	hasher, err := password.New(password.DefaultParams())
+	if err != nil {
+		return err
+	}
+	sessions, err := session.NewService(session.Deps{
+		Tx:         session.NewTxRunner(db),
+		Tenants:    tenant.NewRepository(db),
+		Users:      user.NewRepository(db),
+		Tokens:     session.NewRepository(db),
+		Hasher:     hasher,
+		Issuer:     tokens,
+		AccessTTL:  cfg.Auth.AccessTTL,
+		RefreshTTL: cfg.Auth.RefreshTTL,
+		Log:        log,
+	})
+	if err != nil {
+		return err
+	}
+	// How the tenant is found at login: subdomain first (web), then header (mobile/API), then the request body.
+	resolver := tenantctx.Chain(
+		tenantctx.SubdomainResolver{BaseDomain: cfg.Tenant.BaseDomain},
+		tenantctx.HeaderResolver{Name: cfg.Tenant.Header},
+	)
+	authHandler := session.NewHandler(sessions, resolver, middleware.Authenticate(tokens), log)
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           rest.NewRouter(cfg, log, db),
+		Handler:           rest.NewRouter(cfg, log, db, authHandler),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
