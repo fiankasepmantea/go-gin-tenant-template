@@ -27,13 +27,18 @@ func AccessLog(log *slog.Logger) gin.HandlerFunc {
 		if path == "" {
 			path = "unmatched"
 		}
-		log.LogAttrs(c.Request.Context(), level, "http_request",
+		attrs := []slog.Attr{
 			slog.String("request_id", RequestIDFrom(c)),
 			slog.String("method", c.Request.Method),
 			slog.String("route", path),
 			slog.Int("status", status),
 			slog.Duration("latency", time.Since(start)),
 			slog.String("client_ip", c.ClientIP()),
-		)
+		}
+		// The text of an unexpected error goes to the log only (never to the client), and only for 5xx.
+		if status >= 500 && len(c.Errors) > 0 {
+			attrs = append(attrs, slog.String("error", c.Errors.String()))
+		}
+		log.LogAttrs(c.Request.Context(), level, "http_request", attrs...)
 	}
 }

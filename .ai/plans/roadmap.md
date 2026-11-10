@@ -12,6 +12,7 @@ Check items off when done. Order = order of work.
 - [x] Decision: platform admin in `users` with tenant_id NULL (ADR 0002)
 - [x] Generic tenant-aware `core.Repository[T]` (hooks added when needed)
 - [x] Login/refresh/logout, argon2id, `middleware.Authenticate`, CLI to create the first tenant/user/admin
+- [x] HTTP foundation: error-code catalog, response envelope, `crud.Handler`, list filters/sort/pagination, `middleware.TenantTx`
 - [ ] RBAC middleware with endpoint whitelist
 - [ ] gRPC `AuthService` (Validate/Authorize)
 

@@ -19,6 +19,7 @@
 | `github.com/spf13/cobra` | v1.10.2 | CLI |
 | `golang.org/x/crypto` | v0.48.0 | `argon2` for password hashing (argon2id). Already a transitive dependency of go-paseto |
 | `github.com/jackc/pgx/v5` | v5.10.0 | Used directly only for `pgconn.PgError` (unique violation 23505 in the CLI); otherwise via the gorm driver |
+| `github.com/go-playground/validator/v10` | v10.30.1 | Used directly only to translate binding errors into `validation_failed` (`response.Fail`); the validation itself runs inside gin (`binding:"..."` tags) |
 | `log/slog` | stdlib | Structured logging |
 
 ## Pins for upcoming phases (versions checked against Go 1.25; all still work on 1.26)
@@ -28,7 +29,6 @@
 | `google.golang.org/grpc` | v1.84.0 | v1.85.0 |
 | `google.golang.org/protobuf` | v1.36.12 | |
 | `github.com/redis/go-redis/v9` | v9.22.0 | v9.23.0 |
-| `github.com/go-playground/validator/v10` | v10.30.4 | v10.30.5 |
 | `github.com/golang-migrate/migrate/v4` | v4.19.1 | latest version needs go 1.25.11 |
 | `github.com/prometheus/client_golang` | v1.23.2 | v1.25.0 |
 | `github.com/hibiken/asynq` | v0.26.0 | |

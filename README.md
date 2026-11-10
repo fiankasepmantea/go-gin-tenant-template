@@ -11,7 +11,9 @@ Analogy: one application = one apartment building, each tenant = one resident (a
 | 3 | Core tables and migrations, two admin levels, RLS | **Done** (tested on PostgreSQL) |
 | 4 | Generic tenant-aware `core.Repository`, tenant transactions | **Done** (integration tests) |
 | 5a | Login, refresh-token rotation, logout, `/auth/me`, CLI to create tenants/users/admins ([docs](docs/authentication.md)) | **Done** (unit + integration tests) |
-| 5b | RBAC middleware with endpoint whitelist, gRPC `AuthService`, `BaseHandler` | Next |
+| 5b | HTTP foundation: error-code catalog, response envelope, `BaseHandler` (`crud.Handler`), filters/sort/pagination, `middleware.TenantTx` ([docs](docs/http-api.md)) | **Done** (unit + integration tests) |
+| 5c | RBAC middleware with endpoint whitelist, endpoint sync | Next |
+| 5d | Login rate limiting, password change/reset, gRPC `AuthService` | Not yet |
 | 2b | `make:module`, `make:migration` generators | Not yet |
 | 5–7 | Kafka/RabbitMQ, advanced Kubernetes, observability, Swagger | Base files exist, logic not yet |
 

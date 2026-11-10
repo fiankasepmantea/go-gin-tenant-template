@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -57,5 +56,5 @@ func ClaimsFrom(c *gin.Context) (*auth.Claims, bool) {
 
 func unauthorized(c *gin.Context) {
 	c.Header("WWW-Authenticate", `Bearer realm="api"`)
-	response.Error(c, http.StatusUnauthorized, "unauthorized", "Authentication is required.")
+	response.Abort(c, response.CodeUnauthorized, "Authentication is required.")
 }

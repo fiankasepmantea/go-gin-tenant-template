@@ -115,7 +115,7 @@ func (h *Handler) logout(c *gin.Context) {
 	}
 	if err := h.svc.Logout(c.Request.Context(), strings.TrimSpace(req.RefreshToken)); err != nil {
 		h.log.Error("logout failed", "error", err)
-		response.Error(c, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		response.Abort(c, response.CodeInternal, "Something went wrong.")
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -125,7 +125,7 @@ func (h *Handler) logout(c *gin.Context) {
 func (h *Handler) me(c *gin.Context) {
 	claims, ok := middleware.ClaimsFrom(c)
 	if !ok {
-		response.Error(c, http.StatusUnauthorized, "unauthorized", "Authentication is required.")
+		response.Abort(c, response.CodeUnauthorized, "Authentication is required.")
 		return
 	}
 	body := gin.H{"user_id": claims.UserID, "level": claims.Level}
@@ -148,12 +148,12 @@ func (h *Handler) respond(c *gin.Context, tok *Tokens, err error) {
 			RefreshToken: tok.RefreshToken,
 		})
 	case errors.Is(err, ErrInvalidCredentials):
-		response.Error(c, http.StatusUnauthorized, "invalid_credentials", "Invalid tenant, username or password.")
+		response.Abort(c, response.CodeInvalidCredentials, "Invalid tenant, username or password.")
 	case errors.Is(err, ErrInvalidRefreshToken):
-		response.Error(c, http.StatusUnauthorized, "invalid_refresh_token", "The refresh token is invalid or expired. Please log in again.")
+		response.Abort(c, response.CodeInvalidRefreshToken, "The refresh token is invalid or expired. Please log in again.")
 	default:
 		h.log.Error("auth request failed", "path", c.FullPath(), "error", err)
-		response.Error(c, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		response.Abort(c, response.CodeInternal, "Something went wrong.")
 	}
 }
 
@@ -161,7 +161,7 @@ func (h *Handler) respond(c *gin.Context, tok *Tokens, err error) {
 func bind(c *gin.Context, dst any) bool {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBody)
 	if err := c.ShouldBindJSON(dst); err != nil {
-		response.Error(c, http.StatusBadRequest, "invalid_request", "The request body is invalid.")
+		response.Abort(c, response.CodeInvalidRequest, "The request body is invalid.")
 		return false
 	}
 	return true
