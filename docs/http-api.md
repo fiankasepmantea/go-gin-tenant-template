@@ -136,8 +136,8 @@ h.Register(rg.Group("/groups", middleware.Authenticate(mgr), middleware.TenantTx
    request with the RLS session variables; without it RLS fails closed and every query sees no rows. It commits
    when the request ends below 400 and rolls back otherwise.
 5. **Authorization is not in `crud`.** The handler authenticates nothing by itself; mount it on a group that
-   has the middleware. Per-group endpoint permissions (RBAC) are the next phase and will be one more
-   middleware in that group, after `TenantTx`.
+   has the middleware. Per-group endpoint permissions are `middleware.Authorize`, the last middleware of the
+   group, after `TenantTx` (see [rbac.md](rbac.md)). `internal/app` builds that chain for every module.
 
 Database errors are mapped in one place (`core`): unique violation -> `ErrConflict` (409), foreign key ->
 `ErrReference` (422), wrong type / NOT NULL / CHECK -> `ErrInvalidInput` (400). A unique-violation error still

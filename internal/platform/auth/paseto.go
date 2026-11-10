@@ -131,3 +131,23 @@ func (m *Manager) Parse(token string) (*Claims, error) {
 	}
 	return c, nil
 }
+
+// Verdict is the outcome of an authorization check.
+type Verdict int
+
+const (
+	// VerdictForbidden: the caller is known but may not use this endpoint (HTTP 403).
+	VerdictForbidden Verdict = iota
+	// VerdictAllowed: the call may proceed.
+	VerdictAllowed
+	// VerdictUnauthenticated: the token is valid but the user it names can no longer be used, e.g. the account
+	// was deactivated or deleted (HTTP 401).
+	VerdictUnauthenticated
+)
+
+// Decision is a Verdict plus a short machine-readable reason. The reason is for the server log only and is
+// never sent to the client, so a caller cannot learn which endpoints exist.
+type Decision struct {
+	Verdict Verdict
+	Reason  string
+}

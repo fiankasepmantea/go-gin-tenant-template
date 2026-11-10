@@ -67,4 +67,6 @@ curl -s localhost:8080/api/v1/auth/me -H "Authorization: Bearer <access_token>"
 
 - Rate limiting and lockout against password guessing (planned with Redis).
 - Password change and reset.
-- Authorization (RBAC with the endpoint whitelist) on top of `middleware.Authenticate`: the next phase.
+- gRPC `AuthService` (Validate/Authorize) using the same RBAC service.
+
+Authorization is described in [rbac.md](rbac.md).

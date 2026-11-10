@@ -73,6 +73,10 @@ func TestProvisionCommandsRequireFlags(t *testing.T) {
 		{"tenant", "create", "--code", "acme"},
 		{"user", "create", "--tenant", "acme", "--username", "u", "--email", "a@b.c", "--name", "N"}, // no --password-stdin
 		{"admin", "create", "--username", "u", "--email", "a@b.c", "--name", "N"},                    // no --password-stdin
+		{"group", "create"},
+		{"group", "create", "--tenant", "acme"},
+		{"group", "grant", "--tenant", "acme"},
+		{"user", "set-group", "--tenant", "acme", "--username", "u"},
 	} {
 		cmd := NewRootCmd()
 		cmd.SetOut(&bytes.Buffer{})
