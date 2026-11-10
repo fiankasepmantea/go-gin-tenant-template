@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/app"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/config"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/session"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/tenant"
@@ -21,7 +22,6 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
-	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/version"
 )
 
@@ -81,11 +81,11 @@ func run() error {
 		tenantctx.SubdomainResolver{BaseDomain: cfg.Tenant.BaseDomain},
 		tenantctx.HeaderResolver{Name: cfg.Tenant.Header},
 	)
-	authHandler := session.NewHandler(sessions, resolver, middleware.Authenticate(tokens), log)
+	modules := app.Modules(app.Deps{Log: log, DB: db, Tokens: tokens, Sessions: sessions, Resolver: resolver})
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           rest.NewRouter(cfg, log, db, authHandler),
+		Handler:           rest.NewRouter(cfg, log, db, modules...),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

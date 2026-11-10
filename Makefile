@@ -25,6 +25,9 @@ hooks: ## Enable the git hook (blocks env files/keys, runs gitleaks if installed
 run: ## Run the REST server for ENV (needs .env.$(ENV))
 	APP_ENV=$(ENV) go run ./cmd/server
 
+sync-endpoints: ## Write the routes of the API into the endpoints table (run after migrations, before deploying new routes)
+	APP_ENV=$(ENV) go run ./cmd/cli endpoint sync
+
 build: ## Build all binaries into ./bin
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/server ./cmd/server
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/tenantctl ./cmd/cli

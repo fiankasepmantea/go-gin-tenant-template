@@ -13,7 +13,7 @@ Check items off when done. Order = order of work.
 - [x] Generic tenant-aware `core.Repository[T]` (hooks added when needed)
 - [x] Login/refresh/logout, argon2id, `middleware.Authenticate`, CLI to create the first tenant/user/admin
 - [x] HTTP foundation: error-code catalog, response envelope, `crud.Handler`, list filters/sort/pagination, `middleware.TenantTx`
-- [ ] RBAC middleware with endpoint whitelist
+- [x] RBAC middleware with endpoint whitelist, endpoint sync from the router, permissions API, CLI
 - [ ] gRPC `AuthService` (Validate/Authorize)
 
 ## Phase 3 - Generator

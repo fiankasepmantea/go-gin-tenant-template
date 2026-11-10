@@ -12,8 +12,8 @@ Analogy: one application = one apartment building, each tenant = one resident (a
 | 4 | Generic tenant-aware `core.Repository`, tenant transactions | **Done** (integration tests) |
 | 5a | Login, refresh-token rotation, logout, `/auth/me`, CLI to create tenants/users/admins ([docs](docs/authentication.md)) | **Done** (unit + integration tests) |
 | 5b | HTTP foundation: error-code catalog, response envelope, `BaseHandler` (`crud.Handler`), filters/sort/pagination, `middleware.TenantTx` ([docs](docs/http-api.md)) | **Done** (unit + integration tests) |
-| 5c | RBAC middleware with endpoint whitelist, endpoint sync | Next |
-| 5d | Login rate limiting, password change/reset, gRPC `AuthService` | Not yet |
+| 5c | RBAC: endpoint whitelist, default deny, groups and permissions, `tenantctl endpoint sync` / `group` / `user set-group` ([docs](docs/rbac.md)) | **Done** (unit + integration tests) |
+| 5d | Login rate limiting (Redis), password change/reset, gRPC `AuthService` | Next |
 | 2b | `make:module`, `make:migration` generators | Not yet |
 | 5–7 | Kafka/RabbitMQ, advanced Kubernetes, observability, Swagger | Base files exist, logic not yet |
 

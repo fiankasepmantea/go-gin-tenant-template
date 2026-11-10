@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/app"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/config"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
@@ -93,7 +94,7 @@ func newTenantCmd() *cobra.Command {
 func newUserCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "user", Short: "Manage tenant users"}
 
-	var tenantCode, username, email, name string
+	var tenantCode, username, email, name, groupName string
 	var stdin bool
 	create := &cobra.Command{
 		Use:     "create",
@@ -119,6 +120,12 @@ func newUserCmd() *cobra.Command {
 				return err
 			}
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "user created: tenant=%s username=%s id=%s\n", tenantCode, u.Username, u.ID)
+			if groupName != "" {
+				if err := p.SetUserGroup(context.Background(), tenantCode, u.Username, groupName); err != nil {
+					return fmt.Errorf("the user was created, but putting it in the group failed: %w", err)
+				}
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "user %s is now in group %s\n", u.Username, groupName)
+			}
 			return nil
 		},
 	}
@@ -126,12 +133,145 @@ func newUserCmd() *cobra.Command {
 	create.Flags().StringVar(&username, "username", "", "login name (required)")
 	create.Flags().StringVar(&email, "email", "", "email address (required)")
 	create.Flags().StringVar(&name, "name", "", "display name (required)")
+	create.Flags().StringVar(&groupName, "group", "", "put the user in this group (it must exist, see `group create`)")
 	create.Flags().BoolVar(&stdin, "password-stdin", false, "read the password from stdin (required)")
 	for _, f := range []string{"tenant", "username", "email", "name"} {
 		_ = create.MarkFlagRequired(f)
 	}
 
-	cmd.AddCommand(create)
+	var setTenant, setUser, setGroup string
+	setGroupCmd := &cobra.Command{
+		Use:     "set-group",
+		Short:   "Put an existing user into a group",
+		Args:    cobra.NoArgs,
+		Example: "  tenantctl user set-group --tenant acme --username admin --group admin",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			p, closeFn, err := openProvisioner()
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			if err := p.SetUserGroup(context.Background(), setTenant, setUser, setGroup); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "user %s is now in group %s\n", setUser, setGroup)
+			return nil
+		},
+	}
+	setGroupCmd.Flags().StringVar(&setTenant, "tenant", "", "tenant code (required)")
+	setGroupCmd.Flags().StringVar(&setUser, "username", "", "login name (required)")
+	setGroupCmd.Flags().StringVar(&setGroup, "group", "", "group name (required)")
+	for _, f := range []string{"tenant", "username", "group"} {
+		_ = setGroupCmd.MarkFlagRequired(f)
+	}
+
+	cmd.AddCommand(create, setGroupCmd)
+	return cmd
+}
+
+func newGroupCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "group", Short: "Manage groups (roles) and their permissions"}
+
+	var tenantCode, name, description string
+	create := &cobra.Command{
+		Use:     "create",
+		Short:   "Create a group in a tenant (it starts without permissions)",
+		Args:    cobra.NoArgs,
+		Example: "  tenantctl group create --tenant acme --name admin --description \"Full access\"",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			p, closeFn, err := openProvisioner()
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			g, err := p.CreateGroup(context.Background(), tenantCode, name, description)
+			if err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "group created: tenant=%s name=%s id=%s\n", tenantCode, g.Name, g.ID)
+			return nil
+		},
+	}
+	create.Flags().StringVar(&tenantCode, "tenant", "", "tenant code (required)")
+	create.Flags().StringVar(&name, "name", "", "group name (required)")
+	create.Flags().StringVar(&description, "description", "", "what the group is for")
+	_ = create.MarkFlagRequired("tenant")
+	_ = create.MarkFlagRequired("name")
+
+	var gTenant, gGroup string
+	var all bool
+	var specs []string
+	grant := &cobra.Command{
+		Use:   "grant",
+		Short: "Grant endpoints to a group (adds to what the group already has)",
+		Long: "Grant endpoints to a group. Run `tenantctl endpoint sync` first so that the endpoints exist.\n" +
+			"Use --all for every endpoint that can be granted, or --endpoint \"METHOD /route/pattern\" (repeatable).",
+		Args:    cobra.NoArgs,
+		Example: "  tenantctl group grant --tenant acme --group admin --all\n  tenantctl group grant --tenant acme --group viewer --endpoint \"GET /api/v1/groups\"",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			p, closeFn, err := openProvisioner()
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			n, err := p.GrantEndpoints(context.Background(), gTenant, gGroup, all, specs)
+			if err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "group %s now has %d endpoints (a running server sees this within the cache time, about 30 seconds)\n", gGroup, n)
+			return nil
+		},
+	}
+	grant.Flags().StringVar(&gTenant, "tenant", "", "tenant code (required)")
+	grant.Flags().StringVar(&gGroup, "group", "", "group name (required)")
+	grant.Flags().BoolVar(&all, "all", false, "grant every endpoint that can be granted")
+	grant.Flags().StringArrayVar(&specs, "endpoint", nil, "\"METHOD /route/pattern\" to grant (repeatable)")
+	_ = grant.MarkFlagRequired("tenant")
+	_ = grant.MarkFlagRequired("group")
+
+	cmd.AddCommand(create, grant)
+	return cmd
+}
+
+func newEndpointCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "endpoint", Short: "Manage the endpoint whitelist"}
+
+	var prune bool
+	sync := &cobra.Command{
+		Use:   "sync",
+		Short: "Make the endpoints table match the routes of the server",
+		Long: "Reads the routes of the API from the code and adds the missing ones to the endpoints table, without any\n" +
+			"grants (a new route is refused until a group is granted it). Run it after every deploy that adds or\n" +
+			"changes routes, before the new version takes traffic.\n" +
+			"Rows whose route no longer exists are reported; --prune soft-deletes them.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			p, closeFn, err := openProvisioner()
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			routes := app.Routes(app.Modules(app.Deps{}))
+			res, err := p.SyncEndpoints(context.Background(), routes, prune)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			_, _ = fmt.Fprintf(out, "endpoints: %d routes, %d added, %d updated\n", res.Total, res.Inserted, res.Updated)
+			for _, s := range res.Stale {
+				_, _ = fmt.Fprintf(out, "no longer in the code: %s\n", s)
+			}
+			if prune {
+				_, _ = fmt.Fprintf(out, "pruned: %d\n", res.Pruned)
+			} else if len(res.Stale) > 0 {
+				_, _ = fmt.Fprintln(out, "(kept; run with --prune to remove them)")
+			}
+			return nil
+		},
+	}
+	sync.Flags().BoolVar(&prune, "prune", false, "soft-delete endpoints whose route no longer exists")
+
+	cmd.AddCommand(sync)
 	return cmd
 }
 
