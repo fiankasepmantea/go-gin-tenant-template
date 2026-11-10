@@ -5,9 +5,11 @@ Users can log in to a tenant, receive a PASETO token, and access only the endpoi
 
 ## Work order
 1. ~~Login service and refresh token~~ (done, see docs/authentication.md).
-2. RBAC middleware (check the `endpoint` whitelist) on top of `middleware.Authenticate`.
-3. gRPC AuthService using the same service.
-4. Rate limiting for login (Redis).
+2. ~~HTTP foundation: error-code catalog, envelope, `crud.Handler`, `middleware.TenantTx`~~ (done, see docs/http-api.md).
+3. RBAC middleware (check the `endpoints`/`group_endpoints` whitelist; default deny; match on the Gin route pattern,
+   not the raw URL) after `Authenticate` + `TenantTx`; sync the endpoint list from `engine.Routes()`.
+4. Rate limiting for login (Redis), password change/reset.
+5. gRPC AuthService using the same service.
 
 ## Decisions (final)
 - Platform admins live in `users` with `tenant_id` NULL + `level='platform'` (ADR 0002).
@@ -15,6 +17,7 @@ Users can log in to a tenant, receive a PASETO token, and access only the endpoi
 
 ## Done
 - [x] Migrations 000001-000007 (tested on PostgreSQL 16)
+- [x] `response` (codes, envelope, `Fail`), `request` (`BindJSON`, `ParseList`), `crud.Handler`, `middleware.TenantTx`, JSON 404/405/500
 - [x] Login, refresh-token rotation with reuse detection, logout, `/auth/me`, argon2id, CLI `tenant|user|admin create`
 - [x] Tenant-aware `core.Repository[T]`, `database.InTenantTx`, tenants/groups/users repositories, RLS integration tests
 

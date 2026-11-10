@@ -14,7 +14,8 @@ Login, refresh-token rotation and logout live in `internal/modules/session`. Pas
 | `GET /me` | header `Authorization: Bearer <access token>` | `user_id`, `level`, `tenant_id` |
 
 Token response: `{"access_token", "token_type": "Bearer", "expires_in": <seconds>, "refresh_token"}` with
-`Cache-Control: no-store`. Errors always look like `{"error": {"code", "message"}}`.
+`Cache-Control: no-store`. Errors use the envelope of [http-api.md](http-api.md):
+`{"success": false, "code": 401, "error": {"code", "message"}}`.
 
 ## How the tenant is found at login
 

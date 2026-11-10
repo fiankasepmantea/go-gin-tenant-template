@@ -12,6 +12,7 @@ import (
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/config"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/response"
 )
 
 // Module is a business module that registers its own routes under /api/v1.
@@ -26,7 +27,15 @@ func NewRouter(cfg *config.Config, log *slog.Logger, db *gorm.DB, modules ...Mod
 	}
 
 	r := gin.New()
-	r.Use(middleware.RequestID(), middleware.AccessLog(log), gin.Recovery())
+	r.HandleMethodNotAllowed = true
+	r.Use(middleware.RequestID(), middleware.AccessLog(log), gin.CustomRecovery(func(c *gin.Context, _ any) {
+		// gin already logged the panic and the stack; the client only gets the generic error.
+		response.Abort(c, response.CodeInternal, "")
+	}))
+
+	// Unknown routes and wrong methods answer with the same JSON envelope as every other error.
+	r.NoRoute(func(c *gin.Context) { response.Abort(c, response.CodeNotFound, "") })
+	r.NoMethod(func(c *gin.Context) { response.Abort(c, response.CodeMethodNotAllowed, "") })
 
 	// Liveness: the process is alive. Used by Docker/Kubernetes to decide on restarts.
 	r.GET("/healthz", func(c *gin.Context) {

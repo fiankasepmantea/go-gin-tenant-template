@@ -5,10 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/idgen"
@@ -63,7 +67,7 @@ func (r *Repository[T, P]) Create(ctx context.Context, e P) error {
 		owned.SetTenantID(id) // always overwrites: values from the client are not trusted
 	}
 	if err := database.From(ctx, r.db).Create(e).Error; err != nil {
-		return fmt.Errorf("%s: create: %w", e.TableName(), err)
+		return mapErr(e.TableName(), "create", err)
 	}
 	return nil
 }
@@ -81,10 +85,32 @@ func (r *Repository[T, P]) GetByID(ctx context.Context, id string) (P, error) {
 	return e, nil
 }
 
-// ListParams controls pagination.
+// Filter is an equality condition on one column. All filters of a query are combined with AND.
+type Filter struct {
+	Column string
+	Value  any
+}
+
+// Sort orders the result by one column.
+type Sort struct {
+	Column string
+	Desc   bool
+}
+
+// ListParams controls pagination, filtering and ordering of List.
+//
+// Column names are checked to be plain identifiers and are always quoted, but whether a client may use a
+// column at all is a decision for the caller (the HTTP layer keeps a whitelist per resource).
 type ListParams struct {
 	Page    int // starts at 1
 	PerPage int // default 20, maximum 100
+
+	Filters []Filter
+	Sort    []Sort // the primary key is always added last, so paging is stable
+
+	// CreatedFrom (inclusive) and CreatedBefore (exclusive) bound the created_at column. Zero means unbounded.
+	CreatedFrom   time.Time
+	CreatedBefore time.Time
 }
 
 func (p ListParams) normalize() (limit, offset int) {
@@ -100,6 +126,16 @@ func (p ListParams) normalize() (limit, offset int) {
 	return p.PerPage, (p.Page - 1) * p.PerPage
 }
 
+// identRe is what a column name must look like. Table columns in this project are lower snake case.
+var identRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+
+func checkColumn(name string) error {
+	if !identRe.MatchString(name) {
+		return fmt.Errorf("%w: %q", ErrInvalidColumn, name)
+	}
+	return nil
+}
+
 // Page is the result of List.
 type Page[T any] struct {
 	Items   []T
@@ -108,21 +144,66 @@ type Page[T any] struct {
 	PerPage int
 }
 
-// List fetches records ordered from oldest to newest. UUID v7 is time-ordered, so primary key order = creation order.
+// scope applies the filters and the created_at range of p to conn.
+func scope(conn *gorm.DB, table string, p ListParams) (*gorm.DB, error) {
+	for _, f := range p.Filters {
+		if err := checkColumn(f.Column); err != nil {
+			return nil, err
+		}
+		conn = conn.Where(clause.Eq{Column: clause.Column{Table: table, Name: f.Column}, Value: f.Value})
+	}
+	if !p.CreatedFrom.IsZero() {
+		conn = conn.Where(table+".created_at >= ?", p.CreatedFrom)
+	}
+	if !p.CreatedBefore.IsZero() {
+		conn = conn.Where(table+".created_at < ?", p.CreatedBefore)
+	}
+	return conn, nil
+}
+
+// List fetches records. Without Sort the order is oldest to newest: UUID v7 is time-ordered, so primary key
+// order = creation order.
 func (r *Repository[T, P]) List(ctx context.Context, p ListParams) (Page[T], error) {
 	limit, offset := p.normalize()
 	out := Page[T]{Items: []T{}, Page: offset/limit + 1, PerPage: limit}
+	e := P(new(T))
+	table := e.TableName()
+
+	// Two separate connections from Conn: a gorm chain must not be reused after a finisher.
+	countConn, err := r.Conn(ctx)
+	if err != nil {
+		return out, err
+	}
+	countConn, err = scope(countConn, table, p)
+	if err != nil {
+		return out, err
+	}
+	if err := countConn.Model(e).Count(&out.Total).Error; err != nil {
+		return out, mapErr(table, "count", err)
+	}
 
 	conn, err := r.Conn(ctx)
 	if err != nil {
 		return out, err
 	}
-	e := P(new(T))
-	if err := conn.Model(e).Count(&out.Total).Error; err != nil {
-		return out, mapErr(e.TableName(), "count", err)
+	conn, err = scope(conn, table, p)
+	if err != nil {
+		return out, err
 	}
-	if err := conn.Order(e.PrimaryKey() + " ASC").Limit(limit).Offset(offset).Find(&out.Items).Error; err != nil {
-		return out, mapErr(e.TableName(), "list", err)
+	pk := e.PrimaryKey()
+	hasPK := false
+	for _, s := range p.Sort {
+		if err := checkColumn(s.Column); err != nil {
+			return out, err
+		}
+		hasPK = hasPK || s.Column == pk
+		conn = conn.Order(clause.OrderByColumn{Column: clause.Column{Table: table, Name: s.Column}, Desc: s.Desc})
+	}
+	if !hasPK {
+		conn = conn.Order(clause.OrderByColumn{Column: clause.Column{Table: table, Name: pk}})
+	}
+	if err := conn.Limit(limit).Offset(offset).Find(&out.Items).Error; err != nil {
+		return out, mapErr(table, "list", err)
 	}
 	return out, nil
 }
@@ -181,9 +262,23 @@ func uniqueColumn(pk string) string {
 	return ""
 }
 
+// mapErr turns database errors into the sentinel errors of this package, so callers never depend on a driver.
+// Unknown errors are wrapped and returned as they are.
 func mapErr(table, op string, err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrNotFound
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch {
+		case pgErr.Code == "23505": // unique_violation
+			return fmt.Errorf("%s: %s: %w: %w", table, op, ErrConflict, err) // keeps the driver error for callers that need it
+		case pgErr.Code == "23503": // foreign_key_violation
+			return fmt.Errorf("%s: %s: %w: %w", table, op, ErrReference, err) // keeps the driver error for callers that need it
+		case pgErr.Code == "23502", pgErr.Code == "23514", strings.HasPrefix(pgErr.Code, "22"):
+			// not_null_violation, check_violation, data exception (e.g. invalid input syntax for type uuid)
+			return fmt.Errorf("%s: %s: %w: %w", table, op, ErrInvalidInput, err) // keeps the driver error for callers that need it
+		}
 	}
 	return fmt.Errorf("%s: %s: %w", table, op, err)
 }
