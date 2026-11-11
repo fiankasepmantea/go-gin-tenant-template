@@ -5,11 +5,14 @@ package tenantapp.auth.v1;
 option go_package = "github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/grpc/gen/tenantapp/auth/v1;authv1";
 
 // AuthService lets other services verify tokens and access rights
-// without having to share the PASETO_KEY. (Phase 3)
+// without having to share the PASETO_KEY. See docs/grpc.md.
 service AuthService {
-  // Validate checks an access token and returns its owner's identity.
+  // Validate checks an access token and returns its owner's identity. It verifies the token only (signature, expiry);
+  // use Authorize to also check that the user still exists and is active.
   rpc Validate(ValidateRequest) returns (ValidateResponse);
-  // Authorize checks whether the user may access an endpoint (method + path) in their tenant.
+  // Authorize checks whether the user may access an endpoint (method + route pattern) in their tenant.
+  // allowed=false means refused; the status Unauthenticated means a bad token or a user that is gone or inactive;
+  // Internal means "could not decide": treat it as a refusal.
   rpc Authorize(AuthorizeRequest) returns (AuthorizeResponse);
 }
 

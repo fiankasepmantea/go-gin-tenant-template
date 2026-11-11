@@ -9,13 +9,14 @@ Users can log in to a tenant, receive a PASETO token, and access only the endpoi
 3. ~~RBAC middleware with the endpoint whitelist, endpoint sync, permissions API, CLI~~ (done, see docs/rbac.md).
 4. ~~Rate limiting for login (Redis), password change, forgot/reset password with SMTP~~ (done, see docs/authentication.md).
 5. ~~Generator: `make:module`, `make:migration`~~ (done, see docs/generator.md).
-6. gRPC AuthService using the same service (deferred until a service is split out).
+6. ~~gRPC AuthService using the same RBAC service~~ (done, see docs/grpc.md).
 
 ## Decisions (final)
 - Platform admins live in `users` with `tenant_id` NULL + `level='platform'` (ADR 0002).
 - `app_versions` is global; a nullable `tenant_id` is added only if a white-label app exists.
 
 ## Done
+- [x] gRPC `AuthService`: `internal/transport/grpc`, `cmd/grpc`, generated code in `gen/`, TLS/mTLS, tests incl. agreement with REST
 - [x] Generator `internal/generator` + `tenantctl make:module|make:migration` (generated module is built and tested in CI)
 - [x] Migrations 000001-000009 (tested on PostgreSQL 16)
 - [x] `ratelimit` (Redis + memory store, fail open), login rate limit, `mailer` (SMTP), `session.Account` (change/forgot/reset password), migration 000009

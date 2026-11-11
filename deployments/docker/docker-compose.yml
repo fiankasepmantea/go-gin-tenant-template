@@ -71,5 +71,20 @@ services:
       redis:
         condition: service_healthy
 
+  grpc:
+    profiles: ["grpc"]
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    entrypoint: ["/auth-grpc"]
+    env_file: ../../.env.development
+    environment:
+      DB_HOST: postgres
+    ports:
+      - "${GRPC_PORT:-9090}:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pgdata:

@@ -29,6 +29,7 @@ type Config struct {
 	Limits   RateLimit
 	SMTP     SMTP
 	Password Password
+	GRPC     GRPC
 }
 
 // Database holds the PostgreSQL connection settings.
@@ -43,6 +44,15 @@ type Database struct {
 	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
+}
+
+// GRPC holds the settings of the gRPC AuthService (cmd/grpc). The REST server ignores them.
+type GRPC struct {
+	Addr           string // listen address, default ":9090"
+	TLSCertFile    string // server certificate (PEM)
+	TLSKeyFile     string // its private key (PEM)
+	ClientCAFile   string // when set, clients must present a certificate signed by this CA (mTLS)
+	AllowPlaintext bool   // production only: serve without TLS (for example behind a service mesh that does mTLS)
 }
 
 // Auth holds the PASETO token settings.
@@ -92,6 +102,29 @@ type Password struct {
 	AppName  string        // name shown in the e-mail
 	ResetTTL time.Duration // how long a reset link works
 	ResetURL string        // front end page; placeholders {token} and {tenant}; empty = the e-mail carries the token
+}
+
+// ValidateGRPC checks the settings only cmd/grpc needs. In production the server must use TLS, unless
+// GRPC_ALLOW_PLAINTEXT=true says that something else (a service mesh) encrypts the connection.
+func (c *Config) ValidateGRPC() error {
+	var errs []error
+	g := c.GRPC
+	if _, port, err := net.SplitHostPort(g.Addr); err != nil || port == "" {
+		errs = append(errs, errors.New("GRPC_ADDR must be host:port or :port"))
+	}
+	if (g.TLSCertFile == "") != (g.TLSKeyFile == "") {
+		errs = append(errs, errors.New("GRPC_TLS_CERT_FILE and GRPC_TLS_KEY_FILE must be set together"))
+	}
+	if g.ClientCAFile != "" && g.TLSCertFile == "" {
+		errs = append(errs, errors.New("GRPC_TLS_CLIENT_CA_FILE needs GRPC_TLS_CERT_FILE and GRPC_TLS_KEY_FILE"))
+	}
+	if c.IsProduction() && g.TLSCertFile == "" && !g.AllowPlaintext {
+		errs = append(errs, errors.New("production needs GRPC_TLS_CERT_FILE and GRPC_TLS_KEY_FILE (or GRPC_ALLOW_PLAINTEXT=true behind a service mesh that encrypts)"))
+	}
+	if g.AllowPlaintext && g.TLSCertFile != "" {
+		errs = append(errs, errors.New("GRPC_ALLOW_PLAINTEXT=true contradicts GRPC_TLS_CERT_FILE"))
+	}
+	return errors.Join(errs...)
 }
 
 // IsProduction reports whether the application is running in production mode.
@@ -198,6 +231,13 @@ func fromEnv() (*Config, error) {
 			AppName:  l.str("APP_NAME", "go-gin-tenant-template"),
 			ResetTTL: l.dur("PASSWORD_RESET_TTL", 30*time.Minute),
 			ResetURL: l.str("PASSWORD_RESET_URL", ""),
+		},
+		GRPC: GRPC{
+			Addr:           l.str("GRPC_ADDR", ":9090"),
+			TLSCertFile:    l.str("GRPC_TLS_CERT_FILE", ""),
+			TLSKeyFile:     l.str("GRPC_TLS_KEY_FILE", ""),
+			ClientCAFile:   l.str("GRPC_TLS_CLIENT_CA_FILE", ""),
+			AllowPlaintext: l.bool("GRPC_ALLOW_PLAINTEXT", false),
 		},
 	}
 
@@ -321,6 +361,19 @@ func (l *loader) int(key string, def int) int {
 		return def
 	}
 	return n
+}
+
+func (l *loader) bool(key string, def bool) bool {
+	raw := l.str(key, "")
+	if raw == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		l.errs = append(l.errs, fmt.Errorf("%s must be true or false, got %q", key, raw))
+		return def
+	}
+	return b
 }
 
 func (l *loader) dur(key string, def time.Duration) time.Duration {
