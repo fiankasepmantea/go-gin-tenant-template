@@ -43,12 +43,12 @@ Error:
 | `conflict` | 409 | The record already exists (unique constraint) |
 | `payload_too_large` | 413 | Body bigger than the limit (default 1 MiB) |
 | `validation_failed` | 422 | Well-formed, but a field is not acceptable; also a reference to a missing record |
-| `rate_limited` | 429 | Reserved for login rate limiting |
+| `rate_limited` | 429 | Too many login / password attempts; the `Retry-After` header says how many seconds to wait |
 | `internal_error` | 500 | Unexpected |
 | `service_unavailable` | 503 | |
 
-`token_expired`, `rate_limited` and `service_unavailable` are reserved: they are in the catalog but nothing emits
-them yet (an expired access token is currently `unauthorized`; login rate limiting is a later phase).
+`token_expired` and `service_unavailable` are reserved: they are in the catalog but nothing emits them yet
+(an expired access token is currently `unauthorized`).
 
 The catalog is `response/codes.go`; a test keeps the status and message tables complete. New codes may be
 added; existing codes and statuses never change.

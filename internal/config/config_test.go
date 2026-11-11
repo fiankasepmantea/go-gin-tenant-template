@@ -180,3 +180,57 @@ func TestLoadFrom_NoFilesIsFine(t *testing.T) {
 		t.Fatalf("should still work without env files: %v", err)
 	}
 }
+
+func TestServiceSettings(t *testing.T) {
+	setValidEnv(t)
+	cfg, err := fromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Redis.Addr != "" || cfg.Limits.Attempts != 5 || cfg.Limits.Window != 15*time.Minute ||
+		cfg.SMTP.Enabled() || cfg.SMTP.Port != 587 || cfg.SMTP.Security != "starttls" ||
+		cfg.Password.ResetTTL != 30*time.Minute || cfg.Password.ResetURL != "" {
+		t.Errorf("defaults: %+v %+v %+v %+v", cfg.Redis, cfg.Limits, cfg.SMTP, cfg.Password)
+	}
+}
+
+func TestServiceSettings_Invalid(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"redis without port", map[string]string{"REDIS_ADDR": "localhost"}, "REDIS_ADDR"},
+		{"zero attempts", map[string]string{"RATE_LIMIT_ATTEMPTS": "0"}, "RATE_LIMIT_ATTEMPTS"},
+		{"tiny window", map[string]string{"RATE_LIMIT_WINDOW": "100ms"}, "RATE_LIMIT_WINDOW"},
+		{"reset ttl too short", map[string]string{"PASSWORD_RESET_TTL": "1m"}, "PASSWORD_RESET_TTL"},
+		{"reset ttl too long", map[string]string{"PASSWORD_RESET_TTL": "72h"}, "PASSWORD_RESET_TTL"},
+		{"reset url not http", map[string]string{"PASSWORD_RESET_URL": "javascript:alert(1)"}, "PASSWORD_RESET_URL"},
+		{"smtp without from", map[string]string{"SMTP_HOST": "smtp.example.com"}, "SMTP_FROM"},
+		{"smtp bad security", map[string]string{"SMTP_HOST": "h", "SMTP_FROM": "a@b.test", "SMTP_SECURITY": "ssl"}, "SMTP_SECURITY"},
+		{"smtp bad port", map[string]string{"SMTP_HOST": "h", "SMTP_FROM": "a@b.test", "SMTP_PORT": "70000"}, "SMTP_PORT"},
+		{"production plain smtp", map[string]string{"APP_ENV": "production", "DB_PASSWORD": "x", "DB_SSLMODE": "require", "SMTP_HOST": "h", "SMTP_FROM": "a@b.test", "SMTP_SECURITY": "none"}, "SMTP_SECURITY=none"},
+		{"production http reset url", map[string]string{"APP_ENV": "production", "DB_PASSWORD": "x", "DB_SSLMODE": "require", "PASSWORD_RESET_URL": "http://app.example.com/r?t={token}"}, "https in production"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			setValidEnv(t)
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			_, err := fromEnv()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want it to mention %q", err, tc.want)
+			}
+		})
+	}
+
+	setValidEnv(t)
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_FROM", "App <no-reply@example.com>")
+	t.Setenv("PASSWORD_RESET_URL", "https://{tenant}.example.com/reset?token={token}")
+	t.Setenv("REDIS_ADDR", "redis:6379")
+	if _, err := fromEnv(); err != nil {
+		t.Fatalf("a valid setup must load: %v", err)
+	}
+}

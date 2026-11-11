@@ -38,8 +38,9 @@ test: ## Unit tests
 test-race: ## Unit testss with the race detector
 	go test ./... -count=1 -race
 
-test-integration: ## Tests against a real PostgreSQL (reads DB_* from .env.$(ENV), or TEST_DATABASE_URL)
+test-integration: ## Tests against a real PostgreSQL and Redis (DB_* and REDIS_PORT from .env.$(ENV), or TEST_DATABASE_URL / TEST_REDIS_ADDR)
 	@set -a; [ ! -f .env.$(ENV) ] || . ./.env.$(ENV); set +a; \
+	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-localhost:$${REDIS_PORT:-6379}} \
 	go test -tags integration ./test/integration/... -count=1
 
 cover: ## Coverage report (coverage.html)
@@ -67,7 +68,7 @@ keygen: ## Generate a PASETO_KEY value
 docker-build: ## Build the application image
 	docker build -f deployments/docker/Dockerfile -t go-gin-tenant-template:$(VERSION) --build-arg VERSION=$(VERSION) .
 
-docker-up: ## Start Postgres + Redis (add PROFILES="kafka rabbitmq app" if needed)
+docker-up: ## Start Postgres + Redis (add PROFILES="mail kafka rabbitmq app" if needed)
 	docker compose --env-file .env.$(ENV) -f deployments/docker/docker-compose.yml $(foreach p,$(PROFILES),--profile $(p)) up -d
 
 docker-down: ## Stop all containers

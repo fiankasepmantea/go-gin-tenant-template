@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -23,6 +25,10 @@ type Config struct {
 	DB       Database
 	Auth     Auth
 	Tenant   Tenant
+	Redis    Redis
+	Limits   RateLimit
+	SMTP     SMTP
+	Password Password
 }
 
 // Database holds the PostgreSQL connection settings.
@@ -51,6 +57,41 @@ type Auth struct {
 type Tenant struct {
 	BaseDomain string // e.g. "app.com": tokoa.app.com is recognized as tenant "tokoa"
 	Header     string // header name for mobile/API clients
+}
+
+// Redis holds the connection to Redis (used for rate limiting). Empty Addr = no Redis: counters then live in the
+// memory of the process, which is only correct with a single replica.
+type Redis struct {
+	Addr     string // host:port
+	Password string
+	DB       int
+}
+
+// RateLimit holds the limits of failed login attempts, see session.Limits.
+type RateLimit struct {
+	Attempts int
+	Window   time.Duration
+}
+
+// SMTP holds the mail server for transactional e-mail (password reset). Empty Host = mail is not sent:
+// in development the message is written to the log, in production the reset endpoint cannot deliver.
+type SMTP struct {
+	Host     string
+	Port     int
+	Username string
+	Password string
+	From     string
+	Security string // starttls | tls | none
+}
+
+// Enabled reports whether an SMTP server is configured.
+func (s SMTP) Enabled() bool { return s.Host != "" }
+
+// Password holds the settings of password reset.
+type Password struct {
+	AppName  string        // name shown in the e-mail
+	ResetTTL time.Duration // how long a reset link works
+	ResetURL string        // front end page; placeholders {token} and {tenant}; empty = the e-mail carries the token
 }
 
 // IsProduction reports whether the application is running in production mode.
@@ -136,6 +177,28 @@ func fromEnv() (*Config, error) {
 			BaseDomain: l.str("TENANT_BASE_DOMAIN", ""),
 			Header:     l.str("TENANT_HEADER", "X-Tenant-Code"),
 		},
+		Redis: Redis{
+			Addr:     l.str("REDIS_ADDR", ""),
+			Password: l.str("REDIS_PASSWORD", ""),
+			DB:       l.int("REDIS_DB", 0),
+		},
+		Limits: RateLimit{
+			Attempts: l.int("RATE_LIMIT_ATTEMPTS", 5),
+			Window:   l.dur("RATE_LIMIT_WINDOW", 15*time.Minute),
+		},
+		SMTP: SMTP{
+			Host:     l.str("SMTP_HOST", ""),
+			Port:     l.int("SMTP_PORT", 587),
+			Username: l.str("SMTP_USERNAME", ""),
+			Password: l.str("SMTP_PASSWORD", ""),
+			From:     l.str("SMTP_FROM", ""),
+			Security: l.str("SMTP_SECURITY", "starttls"),
+		},
+		Password: Password{
+			AppName:  l.str("APP_NAME", "go-gin-tenant-template"),
+			ResetTTL: l.dur("PASSWORD_RESET_TTL", 30*time.Minute),
+			ResetURL: l.str("PASSWORD_RESET_URL", ""),
+		},
 	}
 
 	errs := append([]error{}, l.errs...)
@@ -184,7 +247,57 @@ func (c *Config) Validate() error {
 	if c.Auth.RefreshTTL <= c.Auth.AccessTTL {
 		errs = append(errs, errors.New("REFRESH_TOKEN_TTL must be greater than ACCESS_TOKEN_TTL"))
 	}
+	errs = append(errs, c.validateServices()...)
 	return errors.Join(errs...)
+}
+
+// validateServices checks Redis, rate limiting, SMTP and password reset.
+func (c *Config) validateServices() []error {
+	var errs []error
+	if c.Redis.Addr != "" {
+		if host, port, err := net.SplitHostPort(c.Redis.Addr); err != nil || host == "" || port == "" {
+			errs = append(errs, errors.New("REDIS_ADDR must be host:port"))
+		}
+	}
+	if c.Redis.DB < 0 {
+		errs = append(errs, errors.New("REDIS_DB must not be negative"))
+	}
+	if c.Limits.Attempts < 1 {
+		errs = append(errs, errors.New("RATE_LIMIT_ATTEMPTS must be at least 1"))
+	}
+	if c.Limits.Window < time.Second {
+		errs = append(errs, errors.New("RATE_LIMIT_WINDOW must be at least 1s"))
+	}
+	if c.Password.ResetTTL < 5*time.Minute || c.Password.ResetTTL > 24*time.Hour {
+		errs = append(errs, errors.New("PASSWORD_RESET_TTL must be between 5m and 24h"))
+	}
+	if c.Password.ResetURL != "" {
+		u, err := url.Parse(strings.NewReplacer("{token}", "x", "{tenant}", "x").Replace(c.Password.ResetURL))
+		switch {
+		case err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https"):
+			errs = append(errs, errors.New("PASSWORD_RESET_URL must be an http(s) URL, e.g. https://{tenant}.example.com/reset?token={token}"))
+		case c.IsProduction() && u.Scheme != "https":
+			errs = append(errs, errors.New("PASSWORD_RESET_URL must use https in production"))
+		}
+	}
+	if c.SMTP.Enabled() {
+		if c.SMTP.Port < 1 || c.SMTP.Port > 65535 {
+			errs = append(errs, errors.New("SMTP_PORT must be between 1 and 65535"))
+		}
+		if c.SMTP.From == "" {
+			errs = append(errs, errors.New("SMTP_FROM is required when SMTP_HOST is set"))
+		}
+		switch c.SMTP.Security {
+		case "starttls", "tls":
+		case "none":
+			if c.IsProduction() {
+				errs = append(errs, errors.New("SMTP_SECURITY=none is not allowed in production (use starttls or tls)"))
+			}
+		default:
+			errs = append(errs, fmt.Errorf("unknown SMTP_SECURITY %q (starttls|tls|none)", c.SMTP.Security))
+		}
+	}
+	return errs
 }
 
 // loader reads env values while collecting all parse errors at once.

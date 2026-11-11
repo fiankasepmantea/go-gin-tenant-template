@@ -118,6 +118,9 @@ func call(t *testing.T, r http.Handler, method, target, token, body string, head
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	out := apiResp{Status: w.Code, Raw: w.Body.String()}
+	if w.Body.Len() == 0 { // 204 No Content
+		return out
+	}
 	if err := json.Unmarshal(w.Body.Bytes(), &out.Body); err != nil {
 		t.Fatalf("%s %s: response is not JSON: %v: %s", method, target, err, w.Body)
 	}

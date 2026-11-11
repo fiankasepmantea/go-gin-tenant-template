@@ -25,6 +25,7 @@ type Deps struct {
 	DB       *gorm.DB
 	Tokens   *auth.Manager
 	Sessions *session.Service
+	Account  *session.Account // nil: no password endpoints
 	Resolver tenantctx.Resolver
 	RBAC     rbac.Options
 }
@@ -41,9 +42,14 @@ func Modules(d Deps) []rest.Module {
 	rbacSvc := rbac.NewService(endpoint.NewRepository(d.DB), rbac.NewRepository(d.DB), d.RBAC)
 	chain := []gin.HandlerFunc{authn, middleware.TenantTx(d.DB), middleware.Authorize(rbacSvc, d.Log)}
 
+	// /auth/*: public login endpoints; they authenticate themselves and are not decided by RBAC.
+	auth := session.NewHandler(d.Sessions, d.Resolver, authn, d.Log)
+	if d.Account != nil {
+		auth.WithAccount(d.Account)
+	}
+
 	return []rest.Module{
-		// /auth/*: public login endpoints; they authenticate themselves and are not decided by RBAC.
-		session.NewHandler(d.Sessions, d.Resolver, authn, d.Log),
+		auth,
 		group.NewHandler(d.DB, chain...),
 		rbac.NewHandler(rbacSvc, group.NewRepository(d.DB), rbac.NewRepository(d.DB), chain...),
 	}

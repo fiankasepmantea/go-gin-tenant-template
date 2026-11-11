@@ -14,15 +14,21 @@ Check items off when done. Order = order of work.
 - [x] Login/refresh/logout, argon2id, `middleware.Authenticate`, CLI to create the first tenant/user/admin
 - [x] HTTP foundation: error-code catalog, response envelope, `crud.Handler`, list filters/sort/pagination, `middleware.TenantTx`
 - [x] RBAC middleware with endpoint whitelist, endpoint sync from the router, permissions API, CLI
+- [x] Login rate limiting (Redis), password change, forgot/reset password, SMTP mailer
 - [ ] gRPC `AuthService` (Validate/Authorize)
 
 ## Phase 3 - Generator
 - [ ] `tenantctl init`, `make:module`, `make:migration`
 - [ ] Auto-CRUD routes per module
 
+## Phase 3b - Database per tenant (OPTIONAL, only when a real big tenant asks for it)
+- [ ] Tenant router + one connection pool per tenant, migrations over many databases.
+  Not needed for the default model (one schema + `tenant_id` + RLS, docs/multi-tenancy.md); RLS is irrelevant
+  inside a database that belongs to one tenant. Decide per project.
+
 ## Phase 4 - Advanced infrastructure
-- [ ] Redis cache, Asynq worker
-- [ ] RabbitMQ and Kafka (`internal/platform/messaging`)
+- [ ] Redis cache, Asynq worker (optional module, only if a project needs background jobs)
+- [ ] RabbitMQ and Kafka (`internal/platform/messaging`) (optional module, only if a project needs it)
 - [ ] Observability: Prometheus metrics, OpenTelemetry tracing
 - [ ] OpenAPI/Swagger generated from code
 - [ ] Kubernetes hardening (NetworkPolicy, PDB, secret manager)
