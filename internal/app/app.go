@@ -36,7 +36,8 @@ type Deps struct {
 //	TenantTx      opens the database transaction with the row level security variables
 //	Authorize     refuses everything the caller's group was not granted (default deny)
 //
-// To add a module: create its handler with `chain...` as the middleware and append it below.
+// To add a module: `tenantctl make:module <name>` does it; by hand, create the handler with `chain...` as the
+// middleware and append it below.
 func Modules(d Deps) []rest.Module {
 	authn := middleware.Authenticate(d.Tokens)
 	rbacSvc := rbac.NewService(endpoint.NewRepository(d.DB), rbac.NewRepository(d.DB), d.RBAC)
@@ -52,6 +53,7 @@ func Modules(d Deps) []rest.Module {
 		auth,
 		group.NewHandler(d.DB, chain...),
 		rbac.NewHandler(rbacSvc, group.NewRepository(d.DB), rbac.NewRepository(d.DB), chain...),
+		// tenantctl:modules (`tenantctl make:module` adds new modules above this line; keep it)
 	}
 }
 

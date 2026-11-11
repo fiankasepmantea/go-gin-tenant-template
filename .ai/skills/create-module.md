@@ -1,5 +1,16 @@
 # Skill: creating a new module
 
+**Start with the generator** (details: `docs/generator.md`):
+
+```
+make new-module name=product fields="name:string! price:bigint! active:bool" unique=name
+```
+
+It writes the migration, model, repository, CRUD handler, unit test and integration test, and registers the module in
+`internal/app/app.go`. Then apply the migration, `make sync-endpoints`, grant the endpoints to a group, and add the
+business rules (service, custom queries). The steps below describe what the generator produces and what to do by hand
+when a module does not fit the CRUD template.
+
 A module = one complete feature in `internal/modules/<name>/`.
 
 ## Steps
@@ -12,11 +23,11 @@ A module = one complete feature in `internal/modules/<name>/`.
    - `handler.go` thin Gin handler: bind, validate, call the service, write the response.
    - `routes.go` function `Register(r gin.IRouter, h *Handler)`.
    - `*_test.go` per file.
-3. Register the route in `internal/transport/rest` and its endpoint in the whitelist (the `endpoint` module).
+3. Register the handler in `app.Modules` (`internal/app/app.go`), run `make sync-endpoints` and grant the endpoints to a group (default deny, see `docs/rbac.md`).
 4. Test tenant isolation in `test/integration` (copy the pattern from `repository_test.go`), then `make fmt vet test-race test-integration`.
 
 ## Patterns
 
 - Handlers do not call GORM. Services do not know about `gin.Context`.
 - Interfaces are defined on the consumer side (the service), not on the implementation side.
-- A code template will be available via `tenantctl make:module <name>` (generator phase); until then, copy the pattern from the first completed module.
+- Do not edit the generated files to remove tenant isolation (`tenant_id`, RLS policy, the `chain...` middleware); add to them.

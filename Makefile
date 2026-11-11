@@ -11,7 +11,7 @@ LDFLAGS  := -s -w \
 
 .DEFAULT_GOAL := help
 .PHONY: help env-init hooks run build test test-race test-integration cover fmt vet lint vuln tidy keygen \
-        docker-up docker-down docker-build proto migrate-new migrate-up migrate-down
+        docker-up docker-down docker-build proto new-module new-migration migrate-new migrate-up migrate-down
 
 help: ## Show the list of commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n",$$1,$$2}'
@@ -76,6 +76,12 @@ docker-down: ## Stop all containers
 
 proto: ## Generate gRPC code from api/proto (needs buf)
 	buf generate
+
+new-module: ## Generate a module: make new-module name=product fields="name:string! price:bigint!" [unique="name"] [table=products]
+	go run ./cmd/cli make:module $(name) $(foreach f,$(fields),--field '$(f)') $(foreach u,$(unique),--unique $(u)) $(if $(table),--table $(table))
+
+new-migration: ## Create the next numbered empty migration: make new-migration name=add_price_to_products
+	go run ./cmd/cli make:migration $(name)
 
 migrate-new: ## Create a new migration: make migrate-new name=create_tenants
 	migrate create -ext sql -dir migrations -seq $(name)
