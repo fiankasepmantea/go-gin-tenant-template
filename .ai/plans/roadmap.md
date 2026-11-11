@@ -18,8 +18,9 @@ Check items off when done. Order = order of work.
 - [ ] gRPC `AuthService` (Validate/Authorize)
 
 ## Phase 3 - Generator
-- [ ] `tenantctl init`, `make:module`, `make:migration`
-- [ ] Auto-CRUD routes per module
+- [x] `make:module`, `make:migration`, automatic registration in `app.Modules` (docs/generator.md)
+- [x] Auto-CRUD routes per module (generated modules use `crud.Handler`)
+- [ ] `tenantctl init` (rename the project / module path for a new client) - optional, only when needed
 
 ## Phase 3b - Database per tenant (OPTIONAL, only when a real big tenant asks for it)
 - [ ] Tenant router + one connection pool per tenant, migrations over many databases.

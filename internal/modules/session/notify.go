@@ -58,14 +58,16 @@ func (n *MailNotifier) PasswordReset(ctx context.Context, in ResetNotice) error 
 	if minutes < 1 {
 		minutes = 1
 	}
-	var how string
+	var how, what string
 	if n.linkTpl != "" {
+		what = "link"
 		link := strings.NewReplacer(
 			"{token}", url.QueryEscape(in.Token),
 			"{tenant}", url.PathEscape(in.TenantCode),
 		).Replace(n.linkTpl)
 		how = "Open this link to choose a new password:\n\n" + link
 	} else {
+		what = "code"
 		how = "Use this code in " + n.appName + " to choose a new password:\n\n" + in.Token
 	}
 	text := fmt.Sprintf(`Hello %s,
@@ -74,9 +76,9 @@ Someone asked to reset the password of your account at %s.
 
 %s
 
-The link works once and expires in %d minutes. If you did not ask for this, ignore this message:
+The %s works once and expires in %d minutes. If you did not ask for this, ignore this message:
 your password stays as it is.
-`, displayName(in), n.appName, how, minutes)
+`, displayName(in), n.appName, how, what, minutes)
 
 	return n.mail.Send(ctx, mailer.Message{
 		To:      []string{in.Email},

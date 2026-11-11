@@ -36,7 +36,7 @@ func TestMailNotifier_LinkTemplate(t *testing.T) {
 	if len(msg.To) != 1 || msg.To[0] != "alice@a.test" || !strings.Contains(msg.Subject, "Toko") {
 		t.Errorf("message = %+v", msg)
 	}
-	for _, want := range []string{"https://tokoa.example.com/reset?token=" + testToken, "Hello Alice", "30 minutes", "ignore this message"} {
+	for _, want := range []string{"https://tokoa.example.com/reset?token=" + testToken, "Hello Alice", "The link works once", "30 minutes", "ignore this message"} {
 		if !strings.Contains(msg.Text, want) {
 			t.Errorf("body lacks %q:\n%s", want, msg.Text)
 		}
@@ -49,7 +49,8 @@ func TestMailNotifier_WithoutLinkTheTokenIsInTheBody(t *testing.T) {
 	if err := n.PasswordReset(context.Background(), notice()); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(m.got[0].Text, testToken) || !strings.Contains(m.got[0].Text, "the application") {
+	if !strings.Contains(m.got[0].Text, testToken) || !strings.Contains(m.got[0].Text, "the application") ||
+		!strings.Contains(m.got[0].Text, "The code works once") {
 		t.Errorf("body:\n%s", m.got[0].Text)
 	}
 }
