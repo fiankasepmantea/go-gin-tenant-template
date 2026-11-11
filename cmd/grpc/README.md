@@ -1,4 +1,8 @@
 # cmd/grpc
 
-Entry point of the gRPC server (`AuthService`). **Not created yet** — phase 3.
-Rule: `main.go` only loads config, wires dependencies, and runs the server.
+Entry point of the gRPC `AuthService` (see [docs/grpc.md](../../docs/grpc.md)).
+`main.go` only loads the configuration, wires the dependencies and runs the server.
+
+```bash
+make run-grpc          # APP_ENV=development go run ./cmd/grpc, listens on GRPC_ADDR (default :9090)
+```

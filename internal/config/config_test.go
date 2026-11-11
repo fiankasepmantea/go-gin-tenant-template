@@ -234,3 +234,71 @@ func TestServiceSettings_Invalid(t *testing.T) {
 		t.Fatalf("a valid setup must load: %v", err)
 	}
 }
+
+func TestGRPCSettings(t *testing.T) {
+	setValidEnv(t)
+	cfg, err := fromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GRPC.Addr != ":9090" || cfg.GRPC.TLSCertFile != "" || cfg.GRPC.AllowPlaintext {
+		t.Errorf("defaults: %+v", cfg.GRPC)
+	}
+	if err := cfg.ValidateGRPC(); err != nil {
+		t.Errorf("development without TLS must be valid: %v", err)
+	}
+	// the REST server does not care about gRPC settings, even in production
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("DB_PASSWORD", "x")
+	t.Setenv("DB_SSLMODE", "require")
+	prod, err := fromEnv()
+	if err != nil {
+		t.Fatalf("production REST config must not require gRPC TLS: %v", err)
+	}
+	if err := prod.ValidateGRPC(); err == nil || !strings.Contains(err.Error(), "GRPC_TLS_CERT_FILE") {
+		t.Errorf("production gRPC without TLS must be refused: %v", err)
+	}
+}
+
+func TestValidateGRPC(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want string // "" = valid
+	}{
+		{"development plain", nil, ""},
+		{"bad address", map[string]string{"GRPC_ADDR": "9090"}, "GRPC_ADDR"},
+		{"cert without key", map[string]string{"GRPC_TLS_CERT_FILE": "c.pem"}, "together"},
+		{"key without cert", map[string]string{"GRPC_TLS_KEY_FILE": "k.pem"}, "together"},
+		{"client CA without server cert", map[string]string{"GRPC_TLS_CLIENT_CA_FILE": "ca.pem"}, "GRPC_TLS_CLIENT_CA_FILE"},
+		{"plaintext and cert", map[string]string{"GRPC_ALLOW_PLAINTEXT": "true", "GRPC_TLS_CERT_FILE": "c", "GRPC_TLS_KEY_FILE": "k"}, "contradicts"},
+		{"production plain", map[string]string{"APP_ENV": "production", "DB_PASSWORD": "x", "DB_SSLMODE": "require"}, "production needs"},
+		{"production TLS", map[string]string{"APP_ENV": "production", "DB_PASSWORD": "x", "DB_SSLMODE": "require", "GRPC_TLS_CERT_FILE": "c", "GRPC_TLS_KEY_FILE": "k"}, ""},
+		{"production mTLS", map[string]string{"APP_ENV": "production", "DB_PASSWORD": "x", "DB_SSLMODE": "require", "GRPC_TLS_CERT_FILE": "c", "GRPC_TLS_KEY_FILE": "k", "GRPC_TLS_CLIENT_CA_FILE": "ca"}, ""},
+		{"production behind a mesh", map[string]string{"APP_ENV": "production", "DB_PASSWORD": "x", "DB_SSLMODE": "require", "GRPC_ALLOW_PLAINTEXT": "true"}, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			setValidEnv(t)
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			cfg, err := fromEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = cfg.ValidateGRPC()
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("unexpected error: %v", err)
+			case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
+				t.Fatalf("error = %v, want it to mention %q", err, tc.want)
+			}
+		})
+	}
+	setValidEnv(t)
+	t.Setenv("GRPC_ALLOW_PLAINTEXT", "maybe")
+	if _, err := fromEnv(); err == nil || !strings.Contains(err.Error(), "GRPC_ALLOW_PLAINTEXT") {
+		t.Errorf("a non-boolean must be refused: %v", err)
+	}
+}

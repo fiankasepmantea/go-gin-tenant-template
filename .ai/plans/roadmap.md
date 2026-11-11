@@ -15,7 +15,7 @@ Check items off when done. Order = order of work.
 - [x] HTTP foundation: error-code catalog, response envelope, `crud.Handler`, list filters/sort/pagination, `middleware.TenantTx`
 - [x] RBAC middleware with endpoint whitelist, endpoint sync from the router, permissions API, CLI
 - [x] Login rate limiting (Redis), password change, forgot/reset password, SMTP mailer
-- [ ] gRPC `AuthService` (Validate/Authorize)
+- [x] gRPC `AuthService` (Validate/Authorize), docs/grpc.md
 
 ## Phase 3 - Generator
 - [x] `make:module`, `make:migration`, automatic registration in `app.Modules` (docs/generator.md)

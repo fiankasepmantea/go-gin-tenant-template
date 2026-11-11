@@ -11,7 +11,7 @@ LDFLAGS  := -s -w \
 
 .DEFAULT_GOAL := help
 .PHONY: help env-init hooks run build test test-race test-integration cover fmt vet lint vuln tidy keygen \
-        docker-up docker-down docker-build proto new-module new-migration migrate-new migrate-up migrate-down
+        run-grpc docker-up docker-down docker-build proto new-module new-migration migrate-new migrate-up migrate-down
 
 help: ## Show the list of commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n",$$1,$$2}'
@@ -25,12 +25,16 @@ hooks: ## Enable the git hook (blocks env files/keys, runs gitleaks if installed
 run: ## Run the REST server for ENV (needs .env.$(ENV))
 	APP_ENV=$(ENV) go run ./cmd/server
 
+run-grpc: ## Run the gRPC AuthService (cmd/grpc, GRPC_ADDR, default :9090)
+	APP_ENV=$(ENV) go run ./cmd/grpc
+
 sync-endpoints: ## Write the routes of the API into the endpoints table (run after migrations, before deploying new routes)
 	APP_ENV=$(ENV) go run ./cmd/cli endpoint sync
 
 build: ## Build all binaries into ./bin
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/server ./cmd/server
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/tenantctl ./cmd/cli
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/auth-grpc ./cmd/grpc
 
 test: ## Unit tests
 	go test ./... -count=1
@@ -74,7 +78,7 @@ docker-up: ## Start Postgres + Redis (add PROFILES="mail kafka rabbitmq app" if 
 docker-down: ## Stop all containers
 	docker compose --env-file .env.$(ENV) -f deployments/docker/docker-compose.yml --profile kafka --profile rabbitmq --profile app down
 
-proto: ## Generate gRPC code from api/proto (needs buf)
+proto: ## Generate gRPC code from api/proto into internal/transport/grpc/gen (needs buf, protoc-gen-go, protoc-gen-go-grpc)
 	buf generate
 
 new-module: ## Generate a module: make new-module name=product fields="name:string! price:bigint!" [unique="name"] [table=products]
