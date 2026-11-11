@@ -37,6 +37,38 @@ func (r *Repository) FindByUsername(ctx context.Context, username string) (*User
 	return u, nil
 }
 
+// loginOrder prefers the user whose username equals the identifier over one whose e-mail does.
+const loginOrder = "CASE WHEN lower(username) = lower(?) THEN 0 ELSE 1 END"
+
+// FindByLogin looks up a user of the tenant in the context by username OR e-mail address (case-insensitive).
+// It is used to find the account of someone who forgot their password. If a username of one user equals the
+// e-mail of another, the username wins.
+func (r *Repository) FindByLogin(ctx context.Context, identifier string) (*User, error) {
+	conn, err := r.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	u := new(User)
+	err = conn.Where("lower(username) = lower(?) OR lower(email) = lower(?)", identifier, identifier).
+		Order(gorm.Expr(loginOrder, identifier)).Take(u).Error
+	if err != nil {
+		return nil, notFound(err)
+	}
+	return u, nil
+}
+
+// FindPlatformByLogin is FindByLogin for platform admins. Same rules as FindPlatformByUsername.
+func (r *Repository) FindPlatformByLogin(ctx context.Context, identifier string) (*User, error) {
+	u := new(User)
+	err := database.From(ctx, r.db).
+		Where("tenant_id IS NULL AND (lower(username) = lower(?) OR lower(email) = lower(?))", identifier, identifier).
+		Order(gorm.Expr(loginOrder, identifier)).Take(u).Error
+	if err != nil {
+		return nil, notFound(err)
+	}
+	return u, nil
+}
+
 // FindPlatformByUsername looks up a platform admin. Must be called inside a platform-level database.InTenantTx;
 // in any other session RLS hides platform rows, so the result is ErrNotFound.
 func (r *Repository) FindPlatformByUsername(ctx context.Context, username string) (*User, error) {

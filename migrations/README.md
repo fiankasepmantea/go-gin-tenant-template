@@ -24,6 +24,7 @@ Table rules (see `docs/multi-tenancy.md`): `{table}_id uuid` (UUID v7), `{table}
 | 6 | `user_tokens` | refresh tokens (hashed), RLS |
 | 7 | `app_versions` | global, no RLS |
 | 8 | `endpoints.scope` | `tenant` or `platform`: which token level may use the endpoint |
+| 9 | `password_resets` | password reset requests (token hash, expiry, single use), RLS |
 
 Tested on PostgreSQL 16 as a role without BYPASSRLS: fail-closed without a tenant, read/write isolation between tenants,
 platform admins invisible to tenant sessions, level/tenant CHECK, NULL-aware unique, cross-tenant FKs rejected, `down` then `up` again.

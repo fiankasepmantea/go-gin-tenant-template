@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +32,7 @@ type Handler struct {
 	svc          authService
 	resolver     tenant.Resolver
 	authenticate gin.HandlerFunc
+	account      accountService // nil: the password endpoints are not registered
 	log          *slog.Logger
 }
 
@@ -50,6 +53,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	g.POST("/refresh", h.refresh)
 	g.POST("/logout", h.logout)
 	g.GET("/me", h.authenticate, h.me)
+	h.registerPassword(g)
 }
 
 type loginRequest struct {
@@ -147,6 +151,8 @@ func (h *Handler) respond(c *gin.Context, tok *Tokens, err error) {
 			ExpiresIn:    int64(tok.ExpiresIn.Seconds()),
 			RefreshToken: tok.RefreshToken,
 		})
+	case isRateLimited(c, err):
+		// answered by isRateLimited
 	case errors.Is(err, ErrInvalidCredentials):
 		response.Abort(c, response.CodeInvalidCredentials, "Invalid tenant, username or password.")
 	case errors.Is(err, ErrInvalidRefreshToken):
@@ -164,5 +170,17 @@ func bind(c *gin.Context, dst any) bool {
 		response.Abort(c, response.CodeInvalidRequest, "The request body is invalid.")
 		return false
 	}
+	return true
+}
+
+// isRateLimited answers a *RateLimitedError with 429 and a Retry-After header and reports whether it did.
+func isRateLimited(c *gin.Context, err error) bool {
+	var rl *RateLimitedError
+	if !errors.As(err, &rl) {
+		return false
+	}
+	secs := int64(math.Ceil(rl.RetryAfter.Seconds()))
+	c.Header("Retry-After", strconv.FormatInt(max(secs, 1), 10))
+	response.Abort(c, response.CodeRateLimited, "Too many attempts. Please try again later.")
 	return true
 }

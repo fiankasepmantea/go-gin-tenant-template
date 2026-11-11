@@ -21,6 +21,7 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/auth"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/idgen"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/ratelimit"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 )
 
@@ -31,6 +32,13 @@ var (
 	// ErrInvalidRefreshToken is returned when a refresh token is unknown, expired, revoked or malformed.
 	ErrInvalidRefreshToken = errors.New("session: invalid refresh token")
 )
+
+// RateLimitedError is returned when too many attempts were made. RetryAfter says when it is worth trying again.
+type RateLimitedError struct{ RetryAfter time.Duration }
+
+func (e *RateLimitedError) Error() string {
+	return fmt.Sprintf("session: too many attempts, retry after %s", e.RetryAfter.Round(time.Second))
+}
 
 // scopePlatform is the prefix of a platform admin's refresh token. Tenant sessions use the tenant_id instead,
 // so a refresh token tells the server which tenant to look in before any database access (RLS needs it).
@@ -66,6 +74,24 @@ type AccessIssuer interface {
 // Production uses database.InTenantTx; see NewTxRunner.
 type TxRunner func(ctx context.Context, level string, fn func(ctx context.Context) error) error
 
+// Limiter counts failed attempts. *ratelimit.Limiter implements it.
+type Limiter interface {
+	Blocked(ctx context.Context, checks []ratelimit.Check) (time.Duration, bool)
+	Hit(ctx context.Context, checks []ratelimit.Check)
+	Reset(ctx context.Context, checks []ratelimit.Check)
+}
+
+// Limits are the rate limits of login. Zero values mean the defaults (5 attempts per 15 minutes).
+//
+// Failed attempts are counted per (tenant, username, IP) up to Attempts; per IP up to 6 x Attempts (one address
+// trying many users); per (tenant, username) up to 10 x Attempts (many addresses trying one user). The
+// per-username limit is the highest on purpose: it lets an attacker lock one account for a while, so it
+// is only a backstop against distributed guessing.
+type Limits struct {
+	Attempts int
+	Window   time.Duration
+}
+
 // Deps are the collaborators of Service.
 type Deps struct {
 	Tx         TxRunner
@@ -76,6 +102,8 @@ type Deps struct {
 	Issuer     AccessIssuer
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
+	Limiter    Limiter // nil = no rate limiting
+	Limits     Limits
 	Log        *slog.Logger
 	Now        func() time.Time // nil = time.Now
 }
@@ -99,6 +127,12 @@ func NewService(d Deps) (*Service, error) {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
+	if d.Limits.Attempts <= 0 {
+		d.Limits.Attempts = 5
+	}
+	if d.Limits.Window <= 0 {
+		d.Limits.Window = 15 * time.Minute
+	}
 	return &Service{d: d}, nil
 }
 
@@ -118,8 +152,59 @@ type Tokens struct {
 	ExpiresIn    time.Duration // lifetime of AccessToken
 }
 
-// Login signs a user in to a tenant.
+// Login signs a user in to a tenant. After too many failed attempts it returns *RateLimitedError, without
+// looking at the password.
 func (s *Service) Login(ctx context.Context, in LoginInput) (*Tokens, error) {
+	return s.limited(ctx, "tenant", in, s.loginTenant)
+}
+
+// LoginPlatform signs a platform admin in. Platform admins belong to no tenant and have their own endpoint,
+// so a missing tenant code can never be mistaken for a platform login.
+func (s *Service) LoginPlatform(ctx context.Context, in LoginInput) (*Tokens, error) {
+	return s.limited(ctx, "platform", in, func(ctx context.Context, in LoginInput) (*Tokens, error) {
+		return s.login(ctx, auth.LevelPlatform, "", in)
+	})
+}
+
+// limited wraps a login in the rate limits. Only a failed login (wrong tenant, user or password) counts as an
+// attempt; a success clears the (tenant, username, IP) counter, and never the per-IP one, so that an attacker
+// cannot reset the address limit by logging in to an account of their own.
+func (s *Service) limited(ctx context.Context, kind string, in LoginInput, do func(context.Context, LoginInput) (*Tokens, error)) (*Tokens, error) {
+	if s.d.Limiter == nil {
+		return do(ctx, in)
+	}
+	checks := s.loginChecks(kind, in)
+	if wait, blocked := s.d.Limiter.Blocked(ctx, checks); blocked {
+		s.d.Log.Warn("login blocked by the rate limit", "kind", kind, "ip", in.IP, "retry_after", wait.String())
+		return nil, &RateLimitedError{RetryAfter: wait}
+	}
+	tok, err := do(ctx, in)
+	switch {
+	case errors.Is(err, ErrInvalidCredentials):
+		s.d.Limiter.Hit(ctx, checks)
+	case err == nil:
+		s.d.Limiter.Reset(ctx, checks[:1])
+	}
+	return tok, err
+}
+
+// loginChecks lists the counters of a login attempt. The first one is the (tenant, username, IP) counter.
+func (s *Service) loginChecks(kind string, in LoginInput) []ratelimit.Check {
+	n, w := s.d.Limits.Attempts, s.d.Limits.Window
+	tenantCode := strings.ToLower(strings.TrimSpace(in.TenantCode))
+	if kind == "platform" {
+		tenantCode = ""
+	}
+	user := strings.ToLower(strings.TrimSpace(in.Username))
+	acct := kind + "|" + tenantCode + "|" + user
+	return []ratelimit.Check{
+		{Key: "login:acct-ip:" + acct + "|" + in.IP, Limit: n, Window: w},
+		{Key: "login:ip:" + kind + "|" + in.IP, Limit: 6 * n, Window: w},
+		{Key: "login:acct:" + acct, Limit: 10 * n, Window: w},
+	}
+}
+
+func (s *Service) loginTenant(ctx context.Context, in LoginInput) (*Tokens, error) {
 	code, ok := tenantctx.NormalizeCode(in.TenantCode)
 	if !ok {
 		s.d.Hasher.Dummy(in.Password)
@@ -140,12 +225,6 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (*Tokens, error) {
 	}
 
 	return s.login(tenantctx.WithID(ctx, t.ID), auth.LevelTenant, t.ID, in)
-}
-
-// LoginPlatform signs a platform admin in. Platform admins belong to no tenant and have their own endpoint,
-// so a missing tenant code can never be mistaken for a platform login.
-func (s *Service) LoginPlatform(ctx context.Context, in LoginInput) (*Tokens, error) {
-	return s.login(ctx, auth.LevelPlatform, "", in)
 }
 
 func (s *Service) login(ctx context.Context, level, tenantID string, in LoginInput) (*Tokens, error) {
