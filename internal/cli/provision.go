@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/config"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/core"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/endpoint"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/group"
@@ -18,6 +19,7 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/user"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/auth"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/migrate"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 )
@@ -35,6 +37,8 @@ type Provisioner struct {
 	groups  *group.Repository
 	eps     *endpoint.Repository
 	rbac    *rbac.Repository
+	router  *database.Router // nil: every tenant is in db
+	migDir  string           // migrations of a dedicated database must be complete before a tenant is placed there
 }
 
 // NewProvisioner creates a Provisioner. The Hasher must use the same parameters as the server.
@@ -46,8 +50,32 @@ func NewProvisioner(db *gorm.DB, hasher *password.Hasher) *Provisioner {
 	}
 }
 
-// CreateTenant creates an active tenant. The code becomes part of the login URL, so it is validated strictly.
+// NewProvisionerWithRouter is NewProvisioner for an installation that has dedicated tenant databases: the data
+// of a tenant is written to the database of that tenant. migrationsDir is the directory of the up files.
+func NewProvisionerWithRouter(r *database.Router, hasher *password.Hasher, migrationsDir string) *Provisioner {
+	p := NewProvisioner(r.Control(), hasher)
+	p.router, p.migDir = r, migrationsDir
+	return p
+}
+
+// tx opens the transaction on the database of the tenant in ctx (or the control database for platform level).
+func (p *Provisioner) tx(ctx context.Context, level string, fn func(ctx context.Context) error) error {
+	if p.router != nil {
+		return p.router.InTenantTx(ctx, level, fn)
+	}
+	return database.InTenantTx(ctx, p.db, level, fn)
+}
+
+// CreateTenant creates an active tenant in the shared database. The code becomes part of the login URL, so it is validated strictly.
 func (p *Provisioner) CreateTenant(ctx context.Context, code, name string) (*tenant.Tenant, error) {
+	return p.CreateTenantIn(ctx, code, name, "")
+}
+
+// CreateTenantIn creates a tenant. With a dbRef the tenant gets a dedicated database: the reference must have a
+// TENANT_DB_URL_<REF>, and that database must already be migrated to the latest version
+// (`tenantctl migrate up --ref <ref>`). Only new tenants can be placed there: there is no tool that moves the
+// data of an existing tenant.
+func (p *Provisioner) CreateTenantIn(ctx context.Context, code, name, dbRef string) (*tenant.Tenant, error) {
 	code, ok := tenantctx.NormalizeCode(code)
 	if !ok || len(code) < 2 {
 		return nil, errors.New("tenant code must be 2-63 characters: lowercase letters, digits and hyphens, not starting or ending with a hyphen")
@@ -58,10 +86,104 @@ func (p *Provisioner) CreateTenant(ctx context.Context, code, name string) (*ten
 	}
 
 	t := &tenant.Tenant{Code: code, Name: name, Status: tenant.StatusActive}
+	if dbRef == "" {
+		if err := p.tenants.Create(ctx, t); err != nil {
+			return nil, conflictOr(err, "tenant code "+code)
+		}
+		return t, nil
+	}
+	return p.createDedicated(ctx, t, dbRef)
+}
+
+// createDedicated creates the tenant in the control database (with its db_ref) and a copy of the row in its own
+// database, where tenant_id of every table points at it. If the second step fails the first is undone.
+func (p *Provisioner) createDedicated(ctx context.Context, t *tenant.Tenant, dbRef string) (*tenant.Tenant, error) {
+	if p.router == nil {
+		return nil, errors.New("this installation has no dedicated databases (set TENANT_DB_URL_<REF>)")
+	}
+	if !config.ValidTenantDBRef(dbRef) {
+		return nil, fmt.Errorf("db ref %q is not valid: %s", dbRef, config.TenantDBRefPattern)
+	}
+	if !p.router.Configured(dbRef) {
+		return nil, fmt.Errorf("db ref %q has no connection URL: set TENANT_DB_URL_%s", dbRef, strings.ToUpper(dbRef))
+	}
+	ded, err := p.router.Dedicated(dbRef)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.requireMigrated(ctx, ded, dbRef); err != nil {
+		return nil, err
+	}
+	t.DBRef = &dbRef
 	if err := p.tenants.Create(ctx, t); err != nil {
-		return nil, conflictOr(err, "tenant code "+code)
+		return nil, conflictOr(err, "tenant code "+t.Code)
+	}
+	undo := func(cause error) (*tenant.Tenant, error) {
+		if derr := p.db.WithContext(ctx).Unscoped().Delete(&tenant.Tenant{}, "tenant_id = ?", t.ID).Error; derr != nil {
+			cause = fmt.Errorf("%w (and the tenant row in the shared database could not be removed: %w; delete tenant %s by hand)", cause, derr, t.Code)
+		}
+		p.router.Forget(t.ID)
+		return nil, cause
+	}
+	// the same row, with the same id, in the dedicated database (tables there reference tenants)
+	if err := ded.WithContext(ctx).Create(t).Error; err != nil {
+		return undo(fmt.Errorf("create the tenant in database %q: %w", dbRef, err))
+	}
+	if _, err := p.MirrorEndpoints(ctx); err != nil {
+		return undo(err)
 	}
 	return t, nil
+}
+
+// requireMigrated refuses a dedicated database that is empty or behind the migrations of the code.
+func (p *Provisioner) requireMigrated(ctx context.Context, db *gorm.DB, ref string) error {
+	all, err := migrate.Load(p.migDir)
+	if err != nil {
+		return err
+	}
+	st, err := migrate.Current(ctx, db)
+	if err != nil {
+		return fmt.Errorf("database %q: %w (the role of TENANT_DB_URL_%s needs SELECT on schema_migrations)", ref, err, strings.ToUpper(ref))
+	}
+	if want := migrate.Latest(all); st.Version != want || st.Dirty {
+		return fmt.Errorf("database %q is at migration %d (dirty=%t), the code needs %d: run `tenantctl migrate up --ref %s`", ref, st.Version, st.Dirty, want, ref)
+	}
+	return nil
+}
+
+// MirrorEndpoints copies the endpoints of the shared database to every dedicated database that a tenant uses.
+// It continues after a failure and reports all of them together.
+func (p *Provisioner) MirrorEndpoints(ctx context.Context) (int, error) {
+	if p.router == nil {
+		return 0, nil
+	}
+	var refs []string
+	if err := p.db.WithContext(ctx).Raw("SELECT DISTINCT db_ref FROM tenants WHERE db_ref IS NOT NULL AND deleted_at IS NULL ORDER BY 1").Scan(&refs).Error; err != nil {
+		return 0, fmt.Errorf("list dedicated databases: %w", err)
+	}
+	if len(refs) == 0 {
+		return 0, nil
+	}
+	want, err := p.eps.All(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var errs []error
+	n := 0
+	for _, ref := range refs {
+		ded, err := p.router.Dedicated(ref)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		w, err := endpoint.NewRepository(ded).Mirror(ctx, want)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("database %q: %w", ref, err))
+			continue
+		}
+		n += w
+	}
+	return n, errors.Join(errs...)
 }
 
 // CreateTenantUser creates an active user inside the tenant with the given code.
@@ -83,7 +205,7 @@ func (p *Provisioner) CreateTenantUser(ctx context.Context, tenantCode, username
 	}
 
 	ctx = tenantctx.WithID(ctx, t.ID)
-	err = database.InTenantTx(ctx, p.db, auth.LevelTenant, func(ctx context.Context) error {
+	err = p.tx(ctx, auth.LevelTenant, func(ctx context.Context) error {
 		return p.users.Create(ctx, u) // fills tenant_id and level from the context
 	})
 	if err != nil {
@@ -98,7 +220,7 @@ func (p *Provisioner) CreatePlatformAdmin(ctx context.Context, username, email, 
 	if err != nil {
 		return nil, err
 	}
-	err = database.InTenantTx(ctx, p.db, auth.LevelPlatform, func(ctx context.Context) error {
+	err = p.tx(ctx, auth.LevelPlatform, func(ctx context.Context) error {
 		return p.users.CreatePlatform(ctx, u)
 	})
 	if err != nil {
@@ -166,7 +288,7 @@ func (p *Provisioner) CreateGroup(ctx context.Context, tenantCode, name, descrip
 		return nil, err
 	}
 	g := &group.Group{Name: name, Description: description}
-	err = database.InTenantTx(ctx, p.db, auth.LevelTenant, func(ctx context.Context) error {
+	err = p.tx(ctx, auth.LevelTenant, func(ctx context.Context) error {
 		return p.groups.Create(ctx, g)
 	})
 	if err != nil {
@@ -181,7 +303,7 @@ func (p *Provisioner) SetUserGroup(ctx context.Context, tenantCode, username, gr
 	if err != nil {
 		return err
 	}
-	return database.InTenantTx(ctx, p.db, auth.LevelTenant, func(ctx context.Context) error {
+	return p.tx(ctx, auth.LevelTenant, func(ctx context.Context) error {
 		g, err := p.groups.FindByName(ctx, groupName)
 		if errors.Is(err, core.ErrNotFound) {
 			return fmt.Errorf("group %q does not exist in this tenant", groupName)
@@ -212,7 +334,7 @@ func (p *Provisioner) GrantEndpoints(ctx context.Context, tenantCode, groupName 
 		return 0, err
 	}
 	var total int
-	err = database.InTenantTx(ctx, p.db, auth.LevelTenant, func(ctx context.Context) error {
+	err = p.tx(ctx, auth.LevelTenant, func(ctx context.Context) error {
 		g, err := p.groups.FindByName(ctx, groupName)
 		if errors.Is(err, core.ErrNotFound) {
 			return fmt.Errorf("group %q does not exist in this tenant", groupName)
@@ -264,6 +386,15 @@ func (p *Provisioner) GrantEndpoints(ctx context.Context, tenantCode, groupName 
 }
 
 // SyncEndpoints makes the endpoints table match the given routes (see endpoint.Repository.Sync).
+// Dedicated tenant databases get the same endpoints (same ids), see MirrorEndpoints; a failure there is
+// returned after the shared database was updated, and running the command again repeats the copy.
 func (p *Provisioner) SyncEndpoints(ctx context.Context, routes []endpoint.Route, prune bool) (endpoint.SyncResult, error) {
-	return p.eps.Sync(ctx, routes, prune)
+	res, err := p.eps.Sync(ctx, routes, prune)
+	if err != nil {
+		return res, err
+	}
+	if _, err := p.MirrorEndpoints(ctx); err != nil {
+		return res, fmt.Errorf("the shared database is up to date, but not every dedicated database: %w", err)
+	}
+	return res, nil
 }

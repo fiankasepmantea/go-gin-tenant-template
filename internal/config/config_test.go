@@ -302,3 +302,44 @@ func TestValidateGRPC(t *testing.T) {
 		t.Errorf("a non-boolean must be refused: %v", err)
 	}
 }
+
+func TestTenantDB(t *testing.T) {
+	setValidEnv(t)
+	cfg, err := fromEnv()
+	if err != nil || len(cfg.TenantDB.URLs) != 0 || cfg.TenantDB.MaxOpenConns != 10 {
+		t.Fatalf("default: %+v %v", cfg, err)
+	}
+
+	t.Setenv("TENANT_DB_URL_ACME", "postgres://u:p@h:5432/acme?sslmode=disable")
+	cfg, err = fromEnv()
+	if err != nil || cfg.TenantDB.URLs["acme"] == "" {
+		t.Fatalf("a reference is the lower case suffix: %+v %v", cfg.TenantDB, err)
+	}
+
+	bad := map[string]string{
+		"TENANT_DB_URL_ACME": "mysql://u@h/db",
+	}
+	for k, v := range bad {
+		t.Run(k+"="+v, func(t *testing.T) {
+			setValidEnv(t)
+			t.Setenv(k, v)
+			if _, err := fromEnv(); err == nil {
+				t.Fatal("must be rejected")
+			}
+		})
+	}
+
+	// production wants TLS to the dedicated database too
+	setValidEnv(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("DB_PASSWORD", "secret")
+	t.Setenv("DB_SSLMODE", "require")
+	t.Setenv("TENANT_DB_URL_ACME", "postgres://u:p@h:5432/acme?sslmode=disable")
+	if _, err := fromEnv(); err == nil || !strings.Contains(err.Error(), "TENANT_DB_URL_ACME") {
+		t.Fatalf("production must reject sslmode=disable: %v", err)
+	}
+	t.Setenv("TENANT_DB_URL_ACME", "postgres://u:p@h:5432/acme?sslmode=verify-full")
+	if _, err := fromEnv(); err != nil {
+		t.Fatal(err)
+	}
+}

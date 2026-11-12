@@ -10,6 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/core"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 )
 
 // Fail turns any error into the matching error response and stops the handler chain.
@@ -45,6 +46,8 @@ func classify(err error, c *gin.Context) *Error {
 		return &Error{Code: CodeValidationFailed, Message: "A referenced record does not exist."}
 	case errors.Is(err, core.ErrNoTenant):
 		return &Error{Code: CodeForbidden, Message: "A tenant context is required for this resource."}
+	case errors.Is(err, database.ErrUnavailable):
+		return &Error{Code: CodeUnavailable}
 	case errors.Is(err, core.ErrNoFields):
 		return &Error{Code: CodeInvalidRequest, Message: "No fields to update."}
 	case errors.Is(err, core.ErrProtectedField),

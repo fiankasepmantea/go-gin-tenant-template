@@ -18,6 +18,7 @@ import (
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/endpoint"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/rbac"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/auth"
 	grpcsrv "github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/grpc"
 	authv1 "github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/grpc/gen/tenantapp/auth/v1"
 )
@@ -28,7 +29,13 @@ func grpcClient(t *testing.T, e *rbacEnv) authv1.AuthServiceClient {
 	t.Helper()
 	az := rbac.NewService(endpoint.NewRepository(e.app), rbac.NewRepository(e.app),
 		rbac.Options{EndpointTTL: time.Millisecond, AccessTTL: time.Millisecond})
-	as, err := grpcsrv.NewAuthServer(e.mgr, az, grpcsrv.DBTx(e.app), slog.New(slog.DiscardHandler))
+	return serveAuth(t, e.mgr, az, grpcsrv.DBTx(e.app))
+}
+
+// serveAuth serves the AuthService over an in-memory connection.
+func serveAuth(t *testing.T, mgr *auth.Manager, az grpcsrv.Authorizer, tx grpcsrv.TxFunc) authv1.AuthServiceClient {
+	t.Helper()
+	as, err := grpcsrv.NewAuthServer(mgr, az, tx, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

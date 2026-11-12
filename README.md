@@ -16,6 +16,7 @@ Analogy: one application = one apartment building, each tenant = one resident (a
 | 5d | Login rate limiting (Redis), password change, forgot/reset password with SMTP e-mail ([docs](docs/authentication.md)) | **Done** (unit + integration tests) |
 | 5e | Generator: `tenantctl make:module` (migration, model, repository, CRUD handler, tests, registration) and `make:migration` ([docs](docs/generator.md)) | **Done** (unit + generated-module build test + integration test) |
 | 5f | gRPC `AuthService` (`Validate`, `Authorize`, TLS/mTLS, same RBAC decision as REST) ([docs](docs/grpc.md)) | **Done** (unit + integration tests) |
+| 5g | Database per tenant (hybrid): dedicated database for chosen tenants, `tenantctl migrate` ([docs](docs/database-per-tenant.md)) | **Done** (unit + two-database integration tests) |
 | 5–7 | Kafka/RabbitMQ, advanced Kubernetes, observability, Swagger | Base files exist, logic not yet |
 
 ## Prerequisites

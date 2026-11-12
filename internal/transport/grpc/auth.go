@@ -38,6 +38,9 @@ func DBTx(db *gorm.DB) TxFunc {
 	}
 }
 
+// RouterTx is the TxFunc for tenants that may have a database of their own.
+func RouterTx(r *database.Router) TxFunc { return r.InTenantTx }
+
 // Limits of the input. A token is a few hundred bytes and a route pattern is short; anything bigger is not ours.
 const (
 	maxTokenLen = 4096
@@ -124,6 +127,11 @@ func (s *AuthServer) Authorize(ctx context.Context, req *authv1.AuthorizeRequest
 		return derr
 	})
 	if err != nil {
+		if errors.Is(err, database.ErrUnavailable) {
+			s.log.LogAttrs(ctx, slog.LevelError, "grpc_authorize_unavailable",
+				slog.String("tenant_id", claims.TenantID), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Unavailable, "the database of this tenant is not reachable")
+		}
 		s.log.LogAttrs(ctx, slog.LevelError, "grpc_authorize_failed",
 			slog.String("user_id", claims.UserID), slog.String("tenant_id", claims.TenantID), slog.String("error", err.Error()))
 		return nil, status.Error(codes.Internal, "the decision could not be made")

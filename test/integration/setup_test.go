@@ -30,6 +30,9 @@ const appRole = "tenant_app_it"
 type env struct {
 	owner *gorm.DB // table owner: BYPASSES RLS, used only to set up data and to prove the application layer
 	app   *gorm.DB // application role: subject to RLS
+
+	appURL string // connection URL of app (for the dedicated-database router)
+	stop   func() // drops the database now (tests that simulate an outage)
 }
 
 func open(t *testing.T, dsn string) *gorm.DB {
@@ -131,7 +134,10 @@ func setup(t *testing.T) *env {
 		}
 	}
 
-	return &env{owner: ownerDB, app: open(t, withDB(raw, dbName, appRole, "it"))}
+	appURL := withDB(raw, dbName, appRole, "it")
+	return &env{owner: ownerDB, app: open(t, appURL), appURL: appURL, stop: func() {
+		_ = admin.Exec(`DROP DATABASE IF EXISTS "` + dbName + `" WITH (FORCE)`).Error
+	}}
 }
 
 // newTenant creates a tenant through the owner connection and returns a ctx carrying that tenant.

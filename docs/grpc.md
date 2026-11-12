@@ -32,6 +32,7 @@ same questions on a real PostgreSQL.
 | `Unauthenticated` | token forged or expired, or the user no longer exists or is inactive | answer 401 |
 | `InvalidArgument` | no token, unknown method, path that does not start with `/` | fix the call |
 | `Internal` | the decision could not be made (database down, a panic) | **treat as refused** (fail closed), maybe retry |
+| `Unavailable` | the dedicated database of this tenant cannot be reached ([docs](database-per-tenant.md)) | **treat as refused**, retry later |
 
 The reason for a refusal goes to the server log (`access_denied`, `transport=grpc`), never to the caller. Tokens are never logged.
 
@@ -78,7 +79,7 @@ res, err := client.Authorize(ctx, &authv1.AuthorizeRequest{AccessToken: token, M
 if status.Code(err) == codes.Unauthenticated { /* 401 */ } else if err != nil || !res.GetAllowed() { /* 403 */ }
 ```
 
-Set a deadline on every call. On `Internal` or a timeout, refuse the request.
+Set a deadline on every call. On `Internal`, `Unavailable` or a timeout, refuse the request.
 
 ## Tests
 

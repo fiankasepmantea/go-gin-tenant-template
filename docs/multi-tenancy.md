@@ -3,6 +3,8 @@
 Decision: **a single schema with a `tenant_id` column** (option A), with a `TenantResolver` so that
 schema-per-tenant or database-per-tenant can be swapped in without changing modules.
 
+A tenant that needs its own database can have one: see [database-per-tenant.md](database-per-tenant.md).
+
 ## Tenant identity
 
 1. At **login** the tenant is identified in order from: subdomain (web) -> `X-Tenant-Code` header (mobile/API) -> `tenant_code` field in the body.

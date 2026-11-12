@@ -29,9 +29,21 @@ var openProvisioner = func() (*Provisioner, func(), error) {
 	}
 	hasher, err := password.New(password.DefaultParams())
 	if err != nil {
+		closeDB(db)
 		return nil, nil, err
 	}
-	return NewProvisioner(db, hasher), func() { closeDB(db) }, nil
+	router := newRouter(cfg, db)
+	return NewProvisionerWithRouter(router, hasher, migrationsDir), func() { router.Close(); closeDB(db) }, nil
+}
+
+// migrationsDir is where the up files are, relative to the directory the command runs in (the project root).
+const migrationsDir = "migrations"
+
+func newRouter(cfg *config.Config, control *gorm.DB) *database.Router {
+	return database.NewRouter(database.RouterConfig{
+		Control: control, URLs: cfg.TenantDB.URLs, Production: cfg.IsProduction(),
+		Pool: database.Pool{MaxOpen: cfg.TenantDB.MaxOpenConns, MaxIdle: cfg.TenantDB.MaxIdleConns, MaxLifetime: cfg.DB.ConnMaxLifetime},
+	})
 }
 
 func closeDB(db *gorm.DB) {
@@ -63,18 +75,21 @@ The password is read from stdin, never from a flag. Examples:
 func newTenantCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "tenant", Short: "Manage tenants"}
 
-	var code, name string
+	var code, name, dbRef string
 	create := &cobra.Command{
 		Use:   "create",
 		Short: "Create a tenant",
-		Args:  cobra.NoArgs,
+		Long: "Create a tenant. By default its data lives in the shared database. With --db-ref it gets a dedicated\n" +
+			"database: set TENANT_DB_URL_<REF> and run `tenantctl migrate up --ref <ref>` first. Only new tenants can\n" +
+			"be placed in a dedicated database (see docs/database-per-tenant.md).",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			p, closeFn, err := openProvisioner()
 			if err != nil {
 				return err
 			}
 			defer closeFn()
-			t, err := p.CreateTenant(context.Background(), code, name)
+			t, err := p.CreateTenantIn(context.Background(), code, name, dbRef)
 			if err != nil {
 				return err
 			}
@@ -84,6 +99,7 @@ func newTenantCmd() *cobra.Command {
 	}
 	create.Flags().StringVar(&code, "code", "", "tenant code used at login, e.g. acme (required)")
 	create.Flags().StringVar(&name, "name", "", "display name (required)")
+	create.Flags().StringVar(&dbRef, "db-ref", "", "reference of a dedicated database (TENANT_DB_URL_<REF>); empty: shared database")
 	_ = create.MarkFlagRequired("code")
 	_ = create.MarkFlagRequired("name")
 

@@ -3,10 +3,12 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -36,33 +38,59 @@ func DSN(c config.Database) string {
 	return u.String()
 }
 
+// Pool sets the size of a connection pool.
+type Pool struct {
+	MaxOpen     int
+	MaxIdle     int
+	MaxLifetime time.Duration
+}
+
 // Connect opens a connection, configures the connection pool, and verifies the database is reachable.
 func Connect(cfg config.Database, production bool) (*gorm.DB, error) {
+	return ConnectURL(DSN(cfg), Pool{MaxOpen: cfg.MaxOpenConns, MaxIdle: cfg.MaxIdleConns, MaxLifetime: cfg.ConnMaxLifetime}, production)
+}
+
+// ConnectURL is Connect for a ready connection URL (a dedicated tenant database, see Router).
+func ConnectURL(dsn string, pool Pool, production bool) (*gorm.DB, error) {
 	level := logger.Info
 	if production {
 		level = logger.Warn
 	}
 
-	db, err := gorm.Open(postgres.Open(DSN(cfg)), &gorm.Config{
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger:  logger.Default.LogMode(level),
 		NowFunc: func() time.Time { return time.Now().UTC() },
 	})
 	if err != nil {
-		return nil, fmt.Errorf("database: failed to open connection: %w", err)
+		return nil, fmt.Errorf("database: failed to open connection: %w", redact(err, dsn))
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, fmt.Errorf("database: %w", err)
 	}
-	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+	sqlDB.SetMaxOpenConns(pool.MaxOpen)
+	sqlDB.SetMaxIdleConns(pool.MaxIdle)
+	sqlDB.SetConnMaxLifetime(pool.MaxLifetime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := sqlDB.PingContext(ctx); err != nil {
-		return nil, fmt.Errorf("database: ping failed: %w", err)
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("database: ping failed: %w", redact(err, dsn))
 	}
 	return db, nil
+}
+
+// redact keeps the password of a connection URL out of an error message (a log line, a terminal).
+func redact(err error, dsn string) error {
+	u, perr := url.Parse(dsn)
+	if perr != nil || u.User == nil {
+		return err
+	}
+	pw, ok := u.User.Password()
+	if !ok || pw == "" {
+		return err
+	}
+	return errors.New(strings.ReplaceAll(err.Error(), pw, "***"))
 }

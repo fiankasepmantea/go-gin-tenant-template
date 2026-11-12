@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +32,7 @@ type Config struct {
 	SMTP     SMTP
 	Password Password
 	GRPC     GRPC
+	TenantDB TenantDB
 }
 
 // Database holds the PostgreSQL connection settings.
@@ -45,6 +48,26 @@ type Database struct {
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
 }
+
+// TenantDB holds the dedicated databases of tenants that do not live in the shared database
+// (docs/database-per-tenant.md). Empty by default: every tenant is served by DB_*.
+type TenantDB struct {
+	URLs         map[string]string // reference -> connection URL, from TENANT_DB_URL_<REF> (never stored in the database)
+	MaxOpenConns int               // per dedicated database
+	MaxIdleConns int
+}
+
+// TenantDBRefPattern is the format of a reference: it is stored in tenants.db_ref and is the lower case form of
+// the suffix of TENANT_DB_URL_<REF>.
+const TenantDBRefPattern = `^[a-z][a-z0-9_]{0,30}$`
+
+var tenantDBRefRe = regexp.MustCompile(TenantDBRefPattern)
+
+// ValidTenantDBRef reports whether ref is a valid reference.
+func ValidTenantDBRef(ref string) bool { return tenantDBRefRe.MatchString(ref) }
+
+// tenantDBPrefix is the start of the environment variables that hold dedicated database URLs.
+const tenantDBPrefix = "TENANT_DB_URL_"
 
 // GRPC holds the settings of the gRPC AuthService (cmd/grpc). The REST server ignores them.
 type GRPC struct {
@@ -232,6 +255,11 @@ func fromEnv() (*Config, error) {
 			ResetTTL: l.dur("PASSWORD_RESET_TTL", 30*time.Minute),
 			ResetURL: l.str("PASSWORD_RESET_URL", ""),
 		},
+		TenantDB: TenantDB{
+			URLs:         l.tenantDBURLs(),
+			MaxOpenConns: l.int("TENANT_DB_MAX_OPEN_CONNS", 10),
+			MaxIdleConns: l.int("TENANT_DB_MAX_IDLE_CONNS", 2),
+		},
 		GRPC: GRPC{
 			Addr:           l.str("GRPC_ADDR", ":9090"),
 			TLSCertFile:    l.str("GRPC_TLS_CERT_FILE", ""),
@@ -288,6 +316,7 @@ func (c *Config) Validate() error {
 		errs = append(errs, errors.New("REFRESH_TOKEN_TTL must be greater than ACCESS_TOKEN_TTL"))
 	}
 	errs = append(errs, c.validateServices()...)
+	errs = append(errs, c.validateTenantDBs()...)
 	return errors.Join(errs...)
 }
 
@@ -340,6 +369,37 @@ func (c *Config) validateServices() []error {
 	return errs
 }
 
+// validateTenantDBs checks the URLs of dedicated databases. The messages name the variable, never the URL (it holds a password).
+func (c *Config) validateTenantDBs() []error {
+	var errs []error
+	refs := make([]string, 0, len(c.TenantDB.URLs))
+	for ref := range c.TenantDB.URLs {
+		refs = append(refs, ref)
+	}
+	sort.Strings(refs)
+	for _, ref := range refs {
+		name := tenantDBPrefix + strings.ToUpper(ref)
+		u, err := url.Parse(c.TenantDB.URLs[ref])
+		switch {
+		case err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Hostname() == "" || strings.Trim(u.Path, "/") == "":
+			errs = append(errs, fmt.Errorf("%s must be a URL like postgres://user:password@host:5432/dbname?sslmode=require", name))
+		case c.IsProduction():
+			switch u.Query().Get("sslmode") {
+			case "require", "verify-ca", "verify-full":
+			default:
+				errs = append(errs, fmt.Errorf("%s needs sslmode=require (or verify-ca, verify-full) in production", name))
+			}
+		}
+	}
+	if c.TenantDB.MaxOpenConns < 1 {
+		errs = append(errs, errors.New("TENANT_DB_MAX_OPEN_CONNS must be at least 1"))
+	}
+	if c.TenantDB.MaxIdleConns < 0 || c.TenantDB.MaxIdleConns > c.TenantDB.MaxOpenConns {
+		errs = append(errs, errors.New("TENANT_DB_MAX_IDLE_CONNS must be between 0 and TENANT_DB_MAX_OPEN_CONNS"))
+	}
+	return errs
+}
+
 // loader reads env values while collecting all parse errors at once.
 type loader struct{ errs []error }
 
@@ -361,6 +421,25 @@ func (l *loader) int(key string, def int) int {
 		return def
 	}
 	return n
+}
+
+// tenantDBURLs reads every TENANT_DB_URL_<REF>. The reference is the lower case of <REF>.
+func (l *loader) tenantDBURLs() map[string]string {
+	out := map[string]string{}
+	for _, kv := range os.Environ() {
+		name, value, _ := strings.Cut(kv, "=")
+		suffix, ok := strings.CutPrefix(name, tenantDBPrefix)
+		if !ok || strings.TrimSpace(value) == "" {
+			continue
+		}
+		ref := strings.ToLower(suffix)
+		if !ValidTenantDBRef(ref) {
+			l.errs = append(l.errs, fmt.Errorf("%s: %q is not a valid reference (lower case letters, digits and _, starting with a letter, at most 31 characters)", name, ref))
+			continue
+		}
+		out[ref] = strings.TrimSpace(value)
+	}
+	return out
 }
 
 func (l *loader) bool(key string, def bool) bool {

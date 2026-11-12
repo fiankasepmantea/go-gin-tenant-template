@@ -59,6 +59,15 @@ func run() error {
 		}
 	}()
 
+	router := database.NewRouter(database.RouterConfig{
+		Control: db, URLs: cfg.TenantDB.URLs, Production: cfg.IsProduction(),
+		Pool: database.Pool{MaxOpen: cfg.TenantDB.MaxOpenConns, MaxIdle: cfg.TenantDB.MaxIdleConns, MaxLifetime: cfg.DB.ConnMaxLifetime},
+	})
+	defer router.Close()
+	if refs := router.Refs(); len(refs) > 0 {
+		log.Info("dedicated tenant databases configured", "refs", refs)
+	}
+
 	tokens, err := auth.NewManager(cfg.Auth.PasetoKeyHex, cfg.Auth.Issuer, cfg.Auth.AccessTTL)
 	if err != nil {
 		return err
@@ -72,7 +81,7 @@ func run() error {
 	defer closeLimiter()
 
 	sessions, err := session.NewService(session.Deps{
-		Tx:         session.NewTxRunner(db),
+		Tx:         router.InTenantTx,
 		Tenants:    tenant.NewRepository(db),
 		Users:      user.NewRepository(db),
 		Tokens:     session.NewRepository(db),
@@ -87,7 +96,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	account, err := newAccount(cfg, log, db, hasher, limiter, limits)
+	account, err := newAccount(cfg, log, db, router, hasher, limiter, limits)
 	if err != nil {
 		return err
 	}
@@ -96,7 +105,7 @@ func run() error {
 		tenantctx.SubdomainResolver{BaseDomain: cfg.Tenant.BaseDomain},
 		tenantctx.HeaderResolver{Name: cfg.Tenant.Header},
 	)
-	modules := app.Modules(app.Deps{Log: log, DB: db, Tokens: tokens, Sessions: sessions, Account: account, Resolver: resolver})
+	modules := app.Modules(app.Deps{Log: log, DB: db, Router: router, Tokens: tokens, Sessions: sessions, Account: account, Resolver: resolver})
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -154,7 +163,7 @@ func newLimiter(cfg *config.Config, log *slog.Logger) (*ratelimit.Limiter, func(
 
 // newAccount wires password change and reset. Without SMTP the message is only logged, and the log
 // contains the reset link only outside production.
-func newAccount(cfg *config.Config, log *slog.Logger, db *gorm.DB, hasher *password.Hasher, limiter *ratelimit.Limiter, limits session.Limits) (*session.Account, error) {
+func newAccount(cfg *config.Config, log *slog.Logger, db *gorm.DB, router *database.Router, hasher *password.Hasher, limiter *ratelimit.Limiter, limits session.Limits) (*session.Account, error) {
 	var m mailer.Mailer
 	if cfg.SMTP.Enabled() {
 		smtp, err := mailer.NewSMTP(mailer.SMTPConfig{
@@ -176,7 +185,7 @@ func newAccount(cfg *config.Config, log *slog.Logger, db *gorm.DB, hasher *passw
 		return nil, err
 	}
 	return session.NewAccount(session.AccountDeps{
-		Tx:       session.NewTxRunner(db),
+		Tx:       router.InTenantTx,
 		Tenants:  tenant.NewRepository(db),
 		Users:    user.NewRepository(db),
 		Tokens:   session.NewRepository(db),

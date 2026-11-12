@@ -28,13 +28,24 @@ var errRollback = errors.New("middleware: rollback failed request")
 // commit itself (rare: lost connection, deferred constraint) can no longer change the response; it is
 // attached to the context and logged.
 func TenantTx(db *gorm.DB) gin.HandlerFunc {
+	return TenantTxWith(func(ctx context.Context, level string, fn func(ctx context.Context) error) error {
+		return database.InTenantTx(ctx, db, level, fn)
+	})
+}
+
+// TxFunc opens a transaction with the row level security variables set (database.InTenantTx, or
+// database.Router.InTenantTx when tenants may have their own database).
+type TxFunc func(ctx context.Context, level string, fn func(ctx context.Context) error) error
+
+// TenantTxWith is TenantTx with the way of opening the transaction chosen by the caller.
+func TenantTxWith(run TxFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, ok := ClaimsFrom(c)
 		if !ok {
 			unauthorized(c) // mounted without Authenticate: refuse instead of running without a tenant
 			return
 		}
-		err := database.InTenantTx(c.Request.Context(), db, claims.Level, func(ctx context.Context) error {
+		err := run(c.Request.Context(), claims.Level, func(ctx context.Context) error {
 			c.Request = c.Request.WithContext(ctx)
 			c.Next()
 			if c.Writer.Status() >= 400 || len(c.Errors) > 0 {

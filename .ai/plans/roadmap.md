@@ -22,10 +22,9 @@ Check items off when done. Order = order of work.
 - [x] Auto-CRUD routes per module (generated modules use `crud.Handler`)
 - [ ] `tenantctl init` (rename the project / module path for a new client) - optional, only when needed
 
-## Phase 3b - Database per tenant (OPTIONAL, only when a real big tenant asks for it)
-- [ ] Tenant router + one connection pool per tenant, migrations over many databases.
-  Not needed for the default model (one schema + `tenant_id` + RLS, docs/multi-tenancy.md); RLS is irrelevant
-  inside a database that belongs to one tenant. Decide per project.
+## Phase 3b - Database per tenant (hybrid, done)
+- [x] `database.Router`, `tenants.db_ref`, `TENANT_DB_URL_<REF>`, `tenantctl migrate`, `tenant create --db-ref`, endpoint mirror, 503/Unavailable (docs/database-per-tenant.md)
+- [ ] Tool to move an existing tenant into a dedicated database (not in the pilot)
 
 ## Phase 4 - Advanced infrastructure
 - [ ] Redis cache, Asynq worker (optional module, only if a project needs background jobs)
