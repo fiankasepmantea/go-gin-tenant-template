@@ -45,10 +45,10 @@ Error:
 | `validation_failed` | 422 | Well-formed, but a field is not acceptable; also a reference to a missing record |
 | `rate_limited` | 429 | Too many login / password attempts; the `Retry-After` header says how many seconds to wait |
 | `internal_error` | 500 | Unexpected |
-| `service_unavailable` | 503 | |
+| `service_unavailable` | 503 | The dedicated database of the tenant cannot be reached ([docs](database-per-tenant.md)) |
 
-`token_expired` and `service_unavailable` are reserved: they are in the catalog but nothing emits them yet
-(an expired access token is currently `unauthorized`).
+`token_expired` is reserved: it is in the catalog but nothing emits it yet (an expired access token is currently
+`unauthorized`).
 
 The catalog is `response/codes.go`; a test keeps the status and message tables complete. New codes may be
 added; existing codes and statuses never change.

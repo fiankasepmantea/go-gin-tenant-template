@@ -19,6 +19,7 @@ type Tenant struct {
 	Code      string         `gorm:"column:code" json:"code"`
 	Name      string         `gorm:"column:name" json:"name"`
 	Status    string         `gorm:"column:status" json:"status"`
+	DBRef     *string        `gorm:"column:db_ref" json:"db_ref"` // nil: shared database; else the reference of a dedicated one
 	CreatedAt time.Time      `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`

@@ -10,12 +10,14 @@ Users can log in to a tenant, receive a PASETO token, and access only the endpoi
 4. ~~Rate limiting for login (Redis), password change, forgot/reset password with SMTP~~ (done, see docs/authentication.md).
 5. ~~Generator: `make:module`, `make:migration`~~ (done, see docs/generator.md).
 6. ~~gRPC AuthService using the same RBAC service~~ (done, see docs/grpc.md).
+7. ~~Database per tenant, hybrid, `tenantctl migrate`~~ (done, see docs/database-per-tenant.md).
 
 ## Decisions (final)
 - Platform admins live in `users` with `tenant_id` NULL + `level='platform'` (ADR 0002).
 - `app_versions` is global; a nullable `tenant_id` is added only if a white-label app exists.
 
 ## Done
+- [x] Database per tenant (hybrid): `database.Router`, migration 000010, `internal/platform/migrate`, `tenantctl migrate`, `tenant create --db-ref`, endpoint mirror
 - [x] gRPC `AuthService`: `internal/transport/grpc`, `cmd/grpc`, generated code in `gen/`, TLS/mTLS, tests incl. agreement with REST
 - [x] Generator `internal/generator` + `tenantctl make:module|make:migration` (generated module is built and tested in CI)
 - [x] Migrations 000001-000009 (tested on PostgreSQL 16)

@@ -14,6 +14,7 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/rbac"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/session"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/auth"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
@@ -23,6 +24,7 @@ import (
 type Deps struct {
 	Log      *slog.Logger
 	DB       *gorm.DB
+	Router   *database.Router // nil: every tenant is in DB
 	Tokens   *auth.Manager
 	Sessions *session.Service
 	Account  *session.Account // nil: no password endpoints
@@ -41,7 +43,7 @@ type Deps struct {
 func Modules(d Deps) []rest.Module {
 	authn := middleware.Authenticate(d.Tokens)
 	rbacSvc := rbac.NewService(endpoint.NewRepository(d.DB), rbac.NewRepository(d.DB), d.RBAC)
-	chain := []gin.HandlerFunc{authn, middleware.TenantTx(d.DB), middleware.Authorize(rbacSvc, d.Log)}
+	chain := []gin.HandlerFunc{authn, tenantTx(d), middleware.Authorize(rbacSvc, d.Log)}
 
 	// /auth/*: public login endpoints; they authenticate themselves and are not decided by RBAC.
 	auth := session.NewHandler(d.Sessions, d.Resolver, authn, d.Log)
@@ -55,6 +57,14 @@ func Modules(d Deps) []rest.Module {
 		rbac.NewHandler(rbacSvc, group.NewRepository(d.DB), rbac.NewRepository(d.DB), chain...),
 		// tenantctl:modules (`tenantctl make:module` adds new modules above this line; keep it)
 	}
+}
+
+// tenantTx opens the transaction on the database of the tenant: through the router when there is one.
+func tenantTx(d Deps) gin.HandlerFunc {
+	if d.Router != nil {
+		return middleware.TenantTxWith(d.Router.InTenantTx)
+	}
+	return middleware.TenantTx(d.DB)
 }
 
 // Routes lists the method and route pattern of every route the modules register under /api/v1.

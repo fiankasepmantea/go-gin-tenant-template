@@ -56,6 +56,12 @@ func run() error {
 		}
 	}()
 
+	router := database.NewRouter(database.RouterConfig{
+		Control: db, URLs: cfg.TenantDB.URLs, Production: cfg.IsProduction(),
+		Pool: database.Pool{MaxOpen: cfg.TenantDB.MaxOpenConns, MaxIdle: cfg.TenantDB.MaxIdleConns, MaxLifetime: cfg.DB.ConnMaxLifetime},
+	})
+	defer router.Close()
+
 	tokens, err := auth.NewManager(cfg.Auth.PasetoKeyHex, cfg.Auth.Issuer, cfg.Auth.AccessTTL)
 	if err != nil {
 		return err
@@ -63,7 +69,7 @@ func run() error {
 	// The same decision maker as the REST middleware. Its caches follow changes made in another process (the REST
 	// server, the CLI) after at most one TTL: 60s for endpoints, 30s for users and grants.
 	az := rbac.NewService(endpoint.NewRepository(db), rbac.NewRepository(db), rbac.Options{})
-	authSrv, err := grpcsrv.NewAuthServer(tokens, az, grpcsrv.DBTx(db), log)
+	authSrv, err := grpcsrv.NewAuthServer(tokens, az, grpcsrv.RouterTx(router), log)
 	if err != nil {
 		return err
 	}

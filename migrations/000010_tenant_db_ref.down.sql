@@ -1,0 +1,2 @@
+ALTER TABLE tenants DROP CONSTRAINT IF EXISTS tenants_db_ref_format;
+ALTER TABLE tenants DROP COLUMN IF EXISTS db_ref;
