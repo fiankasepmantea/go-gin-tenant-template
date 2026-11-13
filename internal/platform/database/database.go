@@ -43,6 +43,7 @@ type Pool struct {
 	MaxOpen     int
 	MaxIdle     int
 	MaxLifetime time.Duration
+	Quiet       bool // log only warnings and errors (the CLI: a command should print its result, not its SQL)
 }
 
 // Connect opens a connection, configures the connection pool, and verifies the database is reachable.
@@ -53,7 +54,7 @@ func Connect(cfg config.Database, production bool) (*gorm.DB, error) {
 // ConnectURL is Connect for a ready connection URL (a dedicated tenant database, see Router).
 func ConnectURL(dsn string, pool Pool, production bool) (*gorm.DB, error) {
 	level := logger.Info
-	if production {
+	if production || pool.Quiet {
 		level = logger.Warn
 	}
 

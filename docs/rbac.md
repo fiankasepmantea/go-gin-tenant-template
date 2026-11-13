@@ -55,7 +55,7 @@ whitelist.
 ## Workflow when you add or change routes
 
 ```bash
-make migrate-up            # schema changes, if any (this phase added 000008: endpoints.scope)
+make migrate-dev           # schema changes, if any (this phase added 000008: endpoints.scope)
 make sync-endpoints        # = tenantctl endpoint sync: writes the routes of the code into `endpoints`
 tenantctl group grant --tenant acme --group admin --all
 ```

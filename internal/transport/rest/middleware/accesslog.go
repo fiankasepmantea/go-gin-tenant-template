@@ -35,6 +35,10 @@ func AccessLog(log *slog.Logger) gin.HandlerFunc {
 			slog.Duration("latency", time.Since(start)),
 			slog.String("client_ip", c.ClientIP()),
 		}
+		// who: known after Authenticate ran (ids only, never the token)
+		if claims, ok := ClaimsFrom(c); ok {
+			attrs = append(attrs, slog.String("user_id", claims.UserID), slog.String("tenant_id", claims.TenantID))
+		}
 		// The text of an unexpected error goes to the log only (never to the client), and only for 5xx.
 		if status >= 500 && len(c.Errors) > 0 {
 			attrs = append(attrs, slog.String("error", c.Errors.String()))

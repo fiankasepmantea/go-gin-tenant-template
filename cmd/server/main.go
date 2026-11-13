@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -23,10 +24,12 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/logger"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/mailer"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/observability"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/ratelimit"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/openapi"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/version"
 )
 
@@ -107,9 +110,28 @@ func run() error {
 	)
 	modules := app.Modules(app.Deps{Log: log, DB: db, Router: router, Tokens: tokens, Sessions: sessions, Account: account, Resolver: resolver})
 
+	metrics := observability.NewRegistry(version.Version)
+	if sqlDB, err := db.DB(); err == nil {
+		metrics.AddPool("shared", sqlDB.Stats)
+	}
+	for _, ref := range router.Refs() {
+		metrics.AddPool(ref, func() sql.DBStats { return router.Stats(ref) })
+	}
+	opts := rest.Options{Config: cfg, Log: log, DB: db, Router: router, Metrics: metrics}
+	if cfg.Docs.Enabled {
+		spec, err := openapi.SpecHandler(app.Spec(modules, "go-gin-tenant-template API", version.Version))
+		if err != nil {
+			return err
+		}
+		opts.Spec = spec
+	}
+	if cfg.Metrics.Enabled && cfg.Metrics.Token == "" {
+		log.Warn("GET /metrics is open: set METRICS_TOKEN if this port is reachable by others")
+	}
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           rest.NewRouter(cfg, log, db, modules...),
+		Handler:           rest.NewRouterWith(opts, modules...),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

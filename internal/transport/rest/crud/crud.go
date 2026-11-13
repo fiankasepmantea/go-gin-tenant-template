@@ -20,11 +20,14 @@ package crud
 
 import (
 	"context"
+	"path"
 	"slices"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/core"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/openapi"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/request"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/response"
 )
@@ -63,6 +66,7 @@ type Config[T any, P core.Entity[T], C, U any] struct {
 type Handler[T any, P core.Entity[T], C, U any] struct {
 	cfg    Config[T, P, C, U]
 	policy request.ListPolicy
+	base   string // the path the handler was registered under (for the OpenAPI document)
 }
 
 // New creates the handler. It panics when the Config is unusable (nil Store), because that is a programming
@@ -80,6 +84,7 @@ func New[T any, P core.Entity[T], C, U any](cfg Config[T, P, C, U]) *Handler[T, 
 // Register adds the endpoints to rg, which should already be the group of the resource
 // (for example api.Group("/groups", authenticate)). Middleware passed here runs before every endpoint.
 func (h *Handler[T, P, C, U]) Register(rg *gin.RouterGroup, mw ...gin.HandlerFunc) {
+	h.base = rg.BasePath()
 	g := rg.Group("", mw...)
 	g.GET("", h.list)
 	g.GET("/:id", h.get)
@@ -210,4 +215,34 @@ func (h *Handler[T, P, C, U]) remove(c *gin.Context) {
 		return
 	}
 	response.Message(c, "Deleted.")
+}
+
+// Document describes the endpoints of this resource for the OpenAPI document. Call it after Register.
+func (h *Handler[T, P, C, U]) Document(d *openapi.Doc) {
+	if h.base == "" {
+		return
+	}
+	var t T
+	var c C
+	var u U
+	tag := path.Base(h.base)
+	list := []openapi.Param{
+		{Name: "page", Description: "page number, from 1"}, {Name: "per_page", Description: "items per page (at most 100)"},
+		{Name: "sort", Description: "columns, a leading - means descending: -created_at,name. Allowed: " + strings.Join(h.cfg.Sortable, ", ")},
+		{Name: "from", Description: "created_at from, a date (YYYY-MM-DD) or RFC 3339"}, {Name: "to", Description: "created_at until, inclusive"},
+	}
+	for _, col := range h.cfg.Filterable {
+		list = append(list, openapi.Param{Name: col, Description: "equality filter"})
+	}
+	d.Add(openapi.Op{Method: "GET", Path: h.base, Summary: "List " + tag, Tag: tag, Result: t, Kind: openapi.List, Query: list})
+	d.Add(openapi.Op{Method: "GET", Path: h.base + "/:id", Summary: "Get one of " + tag, Tag: tag, Result: t})
+	d.Add(openapi.Op{Method: "GET", Path: h.base + "/show_by/:column/:value", Summary: "Get the first of " + tag + " where column = value", Tag: tag, Result: t})
+	d.Add(openapi.Op{Method: "GET", Path: h.base + "/all_by/:column/:value", Summary: "List " + tag + " where column = value", Tag: tag, Result: t, Kind: openapi.List, Query: list})
+	if h.cfg.Build != nil {
+		d.Add(openapi.Op{Method: "POST", Path: h.base, Summary: "Create in " + tag, Tag: tag, Body: c, Result: t, Status: 201})
+	}
+	if h.cfg.Changes != nil {
+		d.Add(openapi.Op{Method: "PATCH", Path: h.base + "/:id", Summary: "Change one of " + tag + " (send only what changes)", Tag: tag, Body: u, Result: t})
+	}
+	d.Add(openapi.Op{Method: "DELETE", Path: h.base + "/:id", Summary: "Delete one of " + tag, Tag: tag, Kind: openapi.Message})
 }

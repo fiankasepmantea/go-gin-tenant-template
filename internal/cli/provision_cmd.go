@@ -23,7 +23,7 @@ var openProvisioner = func() (*Provisioner, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	db, err := database.Connect(cfg.DB, cfg.IsProduction())
+	db, err := connectControl(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -42,8 +42,15 @@ const migrationsDir = "migrations"
 func newRouter(cfg *config.Config, control *gorm.DB) *database.Router {
 	return database.NewRouter(database.RouterConfig{
 		Control: control, URLs: cfg.TenantDB.URLs, Production: cfg.IsProduction(),
-		Pool: database.Pool{MaxOpen: cfg.TenantDB.MaxOpenConns, MaxIdle: cfg.TenantDB.MaxIdleConns, MaxLifetime: cfg.DB.ConnMaxLifetime},
+		Pool: database.Pool{MaxOpen: cfg.TenantDB.MaxOpenConns, MaxIdle: cfg.TenantDB.MaxIdleConns, MaxLifetime: cfg.DB.ConnMaxLifetime, Quiet: true},
 	})
+}
+
+// connectControl opens the shared database for a CLI command, without the statement log of development mode.
+func connectControl(cfg *config.Config) (*gorm.DB, error) {
+	return database.ConnectURL(database.DSN(cfg.DB), database.Pool{
+		MaxOpen: cfg.DB.MaxOpenConns, MaxIdle: cfg.DB.MaxIdleConns, MaxLifetime: cfg.DB.ConnMaxLifetime, Quiet: true,
+	}, cfg.IsProduction())
 }
 
 func closeDB(db *gorm.DB) {

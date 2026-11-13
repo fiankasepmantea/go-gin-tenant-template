@@ -347,9 +347,9 @@ func TestCreateErrors(t *testing.T) {
 		wantCode   string
 		wantField  string
 	}{
-		{"missing required field", `{"qty":1}`, nil, 422, "validation_failed", "Name"},
-		{"rule violated", `{"name":"way-too-long-name","qty":1}`, nil, 422, "validation_failed", "Name"},
-		{"negative number", `{"name":"x","qty":-1}`, nil, 422, "validation_failed", "Qty"},
+		{"missing required field", `{"qty":1}`, nil, 422, "validation_failed", "name"},
+		{"rule violated", `{"name":"way-too-long-name","qty":1}`, nil, 422, "validation_failed", "name"},
+		{"negative number", `{"name":"x","qty":-1}`, nil, 422, "validation_failed", "qty"},
 		{"broken JSON", `{"name":`, nil, 400, "invalid_request", ""},
 		{"wrong type", `{"name":"x","qty":"many"}`, nil, 400, "invalid_request", ""},
 		{"body too large", `{"name":"` + strings.Repeat("a", 500) + `"}`, nil, 413, "payload_too_large", ""},

@@ -335,3 +335,19 @@ func TestDedicated_GRPCAgreesWithREST(t *testing.T) {
 		t.Fatal("the shared tenant must keep working")
 	}
 }
+
+func TestDedicated_ReadyzListsTenantDatabases(t *testing.T) {
+	d := setupDedicated(t)
+	h := rest.NewRouterWith(rest.Options{Config: &config.Config{Env: "testing"}, Log: slog.New(slog.DiscardHandler),
+		DB: d.shared.app, Router: d.router})
+	res := call(t, h, http.MethodGet, "/readyz", "", "")
+	if res.Status != 200 || !strings.Contains(res.Raw, `"acme":"ok"`) {
+		t.Fatalf("up: %d %s", res.Status, res.Raw)
+	}
+	d.ded.stop()
+	res = call(t, h, http.MethodGet, "/readyz", "", "")
+	// one dedicated database down is reported, but does not take the instance out of rotation
+	if res.Status != 200 || !strings.Contains(res.Raw, `"acme":"unavailable"`) {
+		t.Fatalf("down: %d %s", res.Status, res.Raw)
+	}
+}

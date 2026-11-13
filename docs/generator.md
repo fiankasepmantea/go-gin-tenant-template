@@ -65,7 +65,7 @@ described in `.ai/skills/create-module.md`.
 ### After generating
 
 1. Read the migration. Change it if a column needs a different type; the model and the DTOs are yours to edit as well.
-2. Apply it: `make migrate-up` (a dev database that exists already: `psql ... < migrations/NNNNNN_create_<table>.up.sql`).
+2. Apply it: `make migrate-dev` (the Go runner; a dev database whose migrations were applied by hand needs `go run ./cmd/cli migrate baseline --version N` once).
 3. `make sync-endpoints`: the new routes are registered in the whitelist. Until a group is granted they answer `403` (default deny).
 4. Grant them: `tenantctl group grant --tenant <code> --group <group> --all` or `--endpoint "GET /api/v1/<table>"` (see [rbac.md](rbac.md)).
 5. `make test lint`, and `make test-integration` with the database running.

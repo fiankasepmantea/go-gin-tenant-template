@@ -9,6 +9,7 @@ import (
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/group"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/openapi"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/request"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/response"
 )
@@ -47,6 +48,13 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	g.GET("/rbac/endpoints", h.listEndpoints)
 	g.GET("/groups/:id/permissions", h.getPermissions)
 	g.PUT("/groups/:id/permissions", h.setPermissions)
+}
+
+// Document adds the permission endpoints to the OpenAPI document.
+func (h *Handler) Document(d *openapi.Doc) {
+	d.Add(openapi.Op{Method: "GET", Path: "/api/v1/rbac/endpoints", Summary: "Endpoints that can be granted to a group", Tag: "rbac", Result: []endpointView{}})
+	d.Add(openapi.Op{Method: "GET", Path: "/api/v1/groups/:id/permissions", Summary: "Endpoints granted to a group", Tag: "rbac", Result: permissions{}})
+	d.Add(openapi.Op{Method: "PUT", Path: "/api/v1/groups/:id/permissions", Summary: "Replace the endpoints granted to a group ([] revokes everything)", Tag: "rbac", Body: setPermissionsInput{}, Result: permissions{}})
 }
 
 type endpointView struct {

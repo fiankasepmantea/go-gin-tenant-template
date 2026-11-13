@@ -16,6 +16,7 @@ import (
 	"strconv"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // lockID is the PostgreSQL advisory lock that serializes migration runs.
@@ -67,6 +68,12 @@ type State struct {
 
 const createTable = `CREATE TABLE IF NOT EXISTS schema_migrations (version bigint NOT NULL PRIMARY KEY, dirty boolean NOT NULL)`
 
+// quiet makes the connection log only warnings and errors: the development logger prints every statement, and a
+// migration file is a whole script.
+func quiet(db *gorm.DB) *gorm.DB {
+	return db.Session(&gorm.Session{Logger: db.Logger.LogMode(logger.Warn)})
+}
+
 // ensureTable creates schema_migrations under the lock: CREATE TABLE IF NOT EXISTS alone races with itself when
 // two processes start on an empty database.
 func ensureTable(ctx context.Context, db *gorm.DB) error {
@@ -84,6 +91,7 @@ func ensureTable(ctx context.Context, db *gorm.DB) error {
 
 // Current reads the state of the database without changing it.
 func Current(ctx context.Context, db *gorm.DB) (State, error) {
+	db = quiet(db)
 	var st State
 	if err := db.WithContext(ctx).Raw("SELECT to_regclass('schema_migrations') IS NOT NULL").Scan(&st.HasTable).Error; err != nil {
 		return st, fmt.Errorf("migrate: %w", err)
@@ -128,6 +136,7 @@ func Pending(all []Migration, st State) []Migration {
 // Up applies every pending migration and returns their versions. It refuses to run on a database that has
 // tables but no migration history (applied by hand): record where it is with Baseline first.
 func Up(ctx context.Context, db *gorm.DB, dir string) ([]int64, error) {
+	db = quiet(db)
 	all, err := Load(dir)
 	if err != nil {
 		return nil, err
@@ -200,6 +209,7 @@ func applyOne(ctx context.Context, db *gorm.DB, m Migration) (bool, error) {
 // Baseline records that the database is at version without running anything. Use it once for a database whose
 // migrations were applied by hand (psql). It refuses to move an existing history.
 func Baseline(ctx context.Context, db *gorm.DB, dir string, version int64) error {
+	db = quiet(db)
 	all, err := Load(dir)
 	if err != nil {
 		return err

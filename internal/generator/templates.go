@@ -98,6 +98,7 @@ import (
 	"gorm.io/gorm"
 
 	"{{.Path}}/internal/transport/rest/crud"
+	"{{.Path}}/internal/transport/rest/openapi"
 )
 
 // createInput and updateInput are the only fields a client can set. Identity, tenant and timestamps are not here.
@@ -145,6 +146,9 @@ func NewHandler(db *gorm.DB, mw ...gin.HandlerFunc) *Handler {
 	})
 	return &Handler{h: h, mw: mw}
 }
+
+// Document adds the endpoints to the OpenAPI document.
+func (h *Handler) Document(d *openapi.Doc) { h.h.Document(d) }
 
 // RegisterRoutes registers /{{.Table}} under rg (normally /api/v1).
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {

@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/config"
-	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/migrate"
 )
 
@@ -27,7 +26,7 @@ var openTargets = func(ref string, all bool) ([]target, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	control, err := database.Connect(cfg.DB, cfg.IsProduction())
+	control, err := connectControl(cfg)
 	if err != nil {
 		return nil, nil, err
 	}

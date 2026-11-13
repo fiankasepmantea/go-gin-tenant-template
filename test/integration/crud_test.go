@@ -365,3 +365,18 @@ func TestCRUD_UnknownRoutesUseTheEnvelope(t *testing.T) {
 		t.Errorf("wrong method: %d %s", res.Status, res.Raw)
 	}
 }
+
+func TestCreate_ReturnsDatabaseFilledColumns(t *testing.T) {
+	_, r := setupCRUD(t)
+	tok := login(t, r, "/api/v1/auth/login", "tokoa", "alice", "password-of-alice-a")
+	res := call(t, r, http.MethodPost, "/api/v1/groups", tok, `{"name":"ops"}`)
+	if res.Status != 201 {
+		t.Fatalf("create: %d %s", res.Status, res.Raw)
+	}
+	var g struct {
+		Unique int64 `json:"group_unique"`
+	}
+	if err := json.Unmarshal(res.Body.Data, &g); err != nil || g.Unique == 0 {
+		t.Fatalf("the response must carry group_unique: %s", res.Raw)
+	}
+}

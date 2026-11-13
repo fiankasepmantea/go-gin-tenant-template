@@ -33,6 +33,21 @@ type Config struct {
 	Password Password
 	GRPC     GRPC
 	TenantDB TenantDB
+	Metrics  Metrics
+	Docs     Docs
+}
+
+// Docs configures GET /openapi.json and GET /docs. On by default outside production: the description of an API
+// is useful to its developers, and not something to hand to strangers.
+type Docs struct {
+	Enabled bool
+}
+
+// Metrics configures GET /metrics (Prometheus text format). Off by default in production; when it is on in
+// production a token is required, because the route patterns and counts are not for the public.
+type Metrics struct {
+	Enabled bool
+	Token   string // METRICS_TOKEN: scrapers send it as a Bearer token
 }
 
 // Database holds the PostgreSQL connection settings.
@@ -206,9 +221,10 @@ func loadFile(path string) error {
 
 func fromEnv() (*Config, error) {
 	l := &loader{}
+	env := l.str("APP_ENV", "development")
 
 	cfg := &Config{
-		Env:      l.str("APP_ENV", "development"),
+		Env:      env,
 		Port:     l.str("APP_PORT", "8080"),
 		LogLevel: l.str("LOG_LEVEL", "info"),
 		DB: Database{
@@ -259,6 +275,11 @@ func fromEnv() (*Config, error) {
 			URLs:         l.tenantDBURLs(),
 			MaxOpenConns: l.int("TENANT_DB_MAX_OPEN_CONNS", 10),
 			MaxIdleConns: l.int("TENANT_DB_MAX_IDLE_CONNS", 2),
+		},
+		Docs: Docs{Enabled: l.bool("DOCS_ENABLED", env != "production")},
+		Metrics: Metrics{
+			Enabled: l.bool("METRICS_ENABLED", env != "production"),
+			Token:   l.str("METRICS_TOKEN", ""),
 		},
 		GRPC: GRPC{
 			Addr:           l.str("GRPC_ADDR", ":9090"),
@@ -317,6 +338,9 @@ func (c *Config) Validate() error {
 	}
 	errs = append(errs, c.validateServices()...)
 	errs = append(errs, c.validateTenantDBs()...)
+	if c.IsProduction() && c.Metrics.Enabled && len(c.Metrics.Token) < 16 {
+		errs = append(errs, errors.New("METRICS_ENABLED=true in production needs METRICS_TOKEN of at least 16 characters (or leave METRICS_ENABLED off)"))
+	}
 	return errors.Join(errs...)
 }
 
