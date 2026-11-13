@@ -1,0 +1,3 @@
+# test placeholder tokens in an earlier commit of PR #11 (not secrets; fixed in 54e8950)
+d4714c646964ade4dd96cc5d98f60ea54f3a8ef8:internal/transport/rest/router_test.go:generic-api-key:113
+d4714c646964ade4dd96cc5d98f60ea54f3a8ef8:internal/config/config_test.go:generic-api-key:364
