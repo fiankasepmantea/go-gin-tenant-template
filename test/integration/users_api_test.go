@@ -175,3 +175,10 @@ func page2(t *testing.T, res apiResp) []listedUser {
 	}
 	return p.Data
 }
+
+func mustJSON(t *testing.T, raw []byte, dst any) {
+	t.Helper()
+	if err := json.Unmarshal(raw, dst); err != nil {
+		t.Fatalf("%v: %s", err, raw)
+	}
+}
