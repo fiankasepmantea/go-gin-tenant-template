@@ -1,63 +1,64 @@
-# Lampiran: file untuk record modul lain
+# Attachments: files for the records of other modules
 
-Pola untuk "banyak foto/dokumen milik satu record": foto kegiatan, dokumen kasus, lampiran laporan. File diunggah
-lewat `/files` (lihat `docs/files.md`); tabel lampiran hanya menyimpan **`file_id`**, bukan path.
+A pattern for "many photos or documents that belong to one record": photos of an activity, documents of a case,
+attachments of a report. Files are uploaded through `/files` (see `docs/files.md`); the attachment table only
+stores the **`file_id`**, never a path.
 
-## Alur
+## Flow
 
-1. `POST /api/v1/files` (multipart, field `file`) -> respons berisi `file_id`.
-2. `POST /api/v1/kegiatan/:id/dokumentasi` dengan `{"file_id": "..."}` -> file terlampir.
-3. `GET /api/v1/kegiatan/:id/dokumentasi` -> daftar lampiran, masing-masing dengan `name`, `content_type`,
-   `size`, dan `url` (isi file diambil dari `GET /api/v1/files/<file_id>/content`).
-4. `DELETE /api/v1/kegiatan/:id/dokumentasi/:attachment_id` -> baris lampiran, file, dan isinya terhapus.
+1. `POST /api/v1/files` (multipart, field `file`) -> the response contains a `file_id`.
+2. `POST /api/v1/activities/:id/documents` with `{"file_id": "..."}` -> the file is attached.
+3. `GET /api/v1/activities/:id/documents` -> the attachments, each with `name`, `content_type`, `size`, and `url`
+   (the content is fetched from `GET /api/v1/files/<file_id>/content`).
+4. `DELETE /api/v1/activities/:id/documents/:attachment_id` -> the attachment row, the file, and its content are deleted.
 
-## Memasang untuk tabel Anda (contoh: `dokumentasi_kegiatan`)
+## Wiring it to your table (example: `activity_documents`)
 
-**1. Migrasi** (`tenantctl make:migration add_dokumentasi_kegiatan`). Tabel induk (`kegiatan`) harus punya
-`UNIQUE (tenant_id, kegiatan_id)`:
+**1. Migration** (`tenantctl make:migration add_activity_documents`). The parent table (`activities`) needs
+`UNIQUE (tenant_id, activity_id)`; `tenantctl make:module` already adds it.
 
 ```sql
-CREATE TABLE dokumentasi_kegiatan (
-    dokumentasi_kegiatan_id uuid        PRIMARY KEY,
-    tenant_id               uuid        NOT NULL,
-    kegiatan_id             uuid        NOT NULL,
-    file_id                 uuid        NOT NULL,
-    created_at              timestamptz NOT NULL DEFAULT now(),
-    FOREIGN KEY (tenant_id, kegiatan_id) REFERENCES kegiatan (tenant_id, kegiatan_id) ON DELETE CASCADE,
+CREATE TABLE activity_documents (
+    activity_document_id uuid        PRIMARY KEY,
+    tenant_id            uuid        NOT NULL,
+    activity_id          uuid        NOT NULL,
+    file_id              uuid        NOT NULL,
+    created_at           timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (tenant_id, activity_id) REFERENCES activities (tenant_id, activity_id) ON DELETE CASCADE,
     FOREIGN KEY (tenant_id, file_id)     REFERENCES files (tenant_id, file_id),
-    UNIQUE (file_id)                                    -- satu file hanya untuk satu lampiran
+    UNIQUE (file_id)                                    -- a file belongs to one attachment only
 );
-CREATE INDEX dokumentasi_kegiatan_kegiatan_idx ON dokumentasi_kegiatan (tenant_id, kegiatan_id);
+CREATE INDEX activity_documents_activity_idx ON activity_documents (tenant_id, activity_id);
 
-ALTER TABLE dokumentasi_kegiatan ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dokumentasi_kegiatan FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON dokumentasi_kegiatan
+ALTER TABLE activity_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_documents FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON activity_documents
     USING (tenant_id = app_tenant()) WITH CHECK (tenant_id = app_tenant());
 ```
 
-**2. Daftarkan handler** di `internal/app/app.go`, di atas baris `// tenantctl:modules`:
+**2. Register the handler** in `internal/app/app.go`, above the `// tenantctl:modules` line:
 
 ```go
 attachment.NewHandler(attachment.Config{
-    Name: "dokumentasi", Parent: "kegiatan",
-    Table: "dokumentasi_kegiatan", IDColumn: "dokumentasi_kegiatan_id",
-    ParentTable: "kegiatan", ParentColumn: "kegiatan_id",
+    Name: "documents", Parent: "activities",
+    Table: "activity_documents", IDColumn: "activity_document_id",
+    ParentTable: "activities", ParentColumn: "activity_id",
 }, d.DB, file.NewRepository(d.DB), d.Storage, chain...),
 ```
 
-Untuk tabel kedua (`dokumentasi_gangguan_kamtibmas`) ulangi dengan nama tabel dan kolom yang lain. Lalu
-`endpoint sync` dan `group grant`.
+For a second table repeat this with other table and column names. Then run `endpoint sync` and `group grant`.
 
-## Mengapa foreign key-nya berpasangan `(tenant_id, ...)`
+## Why the foreign keys are pairs `(tenant_id, ...)`
 
-Pengecekan foreign key di PostgreSQL tidak tunduk pada RLS. Dengan FK biasa (`kegiatan_id` saja), tenant B yang
-menebak id kegiatan milik tenant A bisa melampirkan fotonya ke sana. FK berpasangan membuat database sendiri
-menolaknya. Aplikasi memeriksa juga (404 untuk record tenant lain, 422 untuk file tenant lain), jadi dua lapis.
+Foreign key checks in PostgreSQL are not subject to RLS. With a plain foreign key (`activity_id` alone), tenant B
+could guess the id of an activity of tenant A and attach a file to it. A composite foreign key makes the database
+itself refuse that. The application checks as well (404 for a record of another tenant, 422 for a file of another
+tenant), so there are two layers.
 
-## Catatan
+## Notes
 
-- Nama tabel dan kolom di `Config` masuk ke SQL, jadi hanya huruf kecil, angka, dan `_` yang diterima
-  (selain itu handler berhenti saat server start). Nilainya datang dari kode, tidak pernah dari request.
-- Menghapus record induk ikut menghapus baris lampiran (`ON DELETE CASCADE`), tetapi **tidak** file dan isinya.
-  Hapus lampirannya dulu lewat endpoint `DELETE`, atau tulis pembersihan sendiri di modul induk.
-- Daftar lampiran dibatasi `Limit` (default 200) per record.
+- Table and column names in `Config` are put into SQL, so only lowercase letters, digits and `_` are accepted
+  (anything else stops the handler when the server starts). The values come from code, never from a request.
+- Deleting the parent record deletes the attachment rows (`ON DELETE CASCADE`) but **not** the files and their
+  content. Detach through the `DELETE` endpoint first, or write the cleanup in the parent module.
+- The list of attachments is limited by `Limit` (default 200) per record.

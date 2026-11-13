@@ -2,16 +2,16 @@
 // activity, documents of a case, the signature of a user. It is a reusable handler, configured per table:
 //
 //	attachment.NewHandler(attachment.Config{
-//	    Name: "dokumentasi", Parent: "kegiatan",
-//	    Table: "dokumentasi_kegiatan", IDColumn: "dokumentasi_kegiatan_id",
-//	    ParentTable: "kegiatan", ParentColumn: "kegiatan_id",
+//	    Name: "documents", Parent: "activities",
+//	    Table: "activity_documents", IDColumn: "activity_document_id",
+//	    ParentTable: "activities", ParentColumn: "activity_id",
 //	}, db, files, blobs, chain...)
 //
 // serves
 //
-//	GET    /kegiatan/:id/dokumentasi                  files attached to the record
-//	POST   /kegiatan/:id/dokumentasi                  {"file_id": "..."} attach an uploaded file
-//	DELETE /kegiatan/:id/dokumentasi/:attachment_id   detach and delete the file
+//	GET    /activities/:id/documents                  files attached to the record
+//	POST   /activities/:id/documents                  {"file_id": "..."} attach an uploaded file
+//	DELETE /activities/:id/documents/:attachment_id   detach and delete the file
 //
 // The table is made by a migration of the application (docs/attachments.md has the SQL). The composite foreign
 // keys of that SQL, with row level security, are what keeps a tenant away from the records and files of another.
@@ -43,8 +43,8 @@ var identRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 // Config names the tables and the routes. Names of tables and columns are checked to be plain identifiers,
 // because they are put into SQL; they come from code, never from a request.
 type Config struct {
-	Name         string // last path segment: "dokumentasi"
-	Parent       string // path segment of the record: "kegiatan" (routes: /kegiatan/:id/dokumentasi)
+	Name         string // last path segment: "documents"
+	Parent       string // path segment of the record: "activities" (routes: /activities/:id/documents)
 	Table        string // the attachment table
 	IDColumn     string // primary key of the attachment table (uuid)
 	ParentColumn string // column of the attachment table that points to the record

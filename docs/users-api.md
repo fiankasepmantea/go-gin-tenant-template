@@ -1,35 +1,36 @@
-# API user (`/api/v1/users`)
+# Users API (`/api/v1/users`)
 
-Administrator tenant mengelola user tenant-nya sendiri lewat API. Sebelumnya user hanya bisa dibuat lewat CLI
-(`tenantctl user create`).
+A tenant administrator manages the users of their own tenant through the API. Before this, users could only be
+created with the CLI (`tenantctl user create`).
 
-| Method | Path | Fungsi |
+| Method | Path | Purpose |
 |---|---|---|
-| GET | `/users` | daftar user (filter `username`, `email`, `name`, `is_active`, `group_id`; sort `username`, `email`, `name`, `created_at`; `page`, `per_page`, `from`, `to`) |
-| GET | `/users/:id` | satu user |
-| POST | `/users` | buat user: `username`, `email`, `name`, `password` (min 10 karakter), `group_id` (opsional), `is_active` (default true) |
-| PATCH | `/users/:id` | ubah `email`, `name`, `group_id` (`""` = keluarkan dari group), `is_active` |
-| DELETE | `/users/:id` | hapus (soft delete) |
-| POST | `/users/:id/password` | admin mengatur password baru: `{"password": "..."}` |
+| GET | `/users` | list users (filters `username`, `email`, `name`, `is_active`, `group_id`; sort `username`, `email`, `name`, `created_at`; `page`, `per_page`, `from`, `to`) |
+| GET | `/users/:id` | one user |
+| POST | `/users` | create a user: `username`, `email`, `name`, `password` (at least 10 characters), `group_id` (optional), `is_active` (default true) |
+| PATCH | `/users/:id` | change `email`, `name`, `group_id` (`""` removes the user from the group), `is_active` |
+| DELETE | `/users/:id` | delete (soft delete) |
+| POST | `/users/:id/password` | an administrator sets a new password: `{"password": "..."}` |
 
-## Aturan
+## Rules
 
-- **Isolasi tenant**: tenant diambil dari token, bukan dari request. Repository menerapkan filter tenant dan
-  PostgreSQL RLS menjaganya sekali lagi. User tenant lain tidak terlihat (404). Platform admin tidak muncul.
-- **Password** tidak pernah dikembalikan. Password baru divalidasi kebijakan yang sama dengan ganti password
-  (min 10, maks 1024 karakter) dan di-hash argon2id.
-- Menonaktifkan (`is_active=false`), menghapus user, atau mengatur password baru **mengakhiri semua sesi** user
-  itu (refresh token dicabut).
-- Admin **tidak bisa menonaktifkan atau menghapus akun sendiri** (403) supaya tenant tidak kehilangan
-  admin terakhir secara tidak sengaja.
-- `username`/`email` unik per tenant (tidak peka huruf besar/kecil) -> 409 bila bentrok.
-  `group_id` harus group milik tenant yang sama -> 422 bila tidak.
-- Akses diatur RBAC seperti endpoint lain (default deny). Setelah deploy:
+- **Tenant isolation**: the tenant comes from the token, not from the request. The repository applies the tenant
+  filter and PostgreSQL RLS enforces it again. Users of other tenants are invisible (404). Platform admins never
+  show up.
+- **Passwords** are never returned. A new password must pass the same policy as a password change (at least 10 and
+  at most 1024 characters) and is hashed with argon2id.
+- Deactivating (`is_active=false`), deleting, or setting a new password **ends all sessions** of that user
+  (their refresh tokens are revoked).
+- An administrator **cannot deactivate or delete their own account** (403), so a tenant cannot lose its last
+  administrator by accident.
+- `username` and `email` are unique per tenant (case-insensitive): a clash is 409. `group_id` must be a group of
+  the same tenant: anything else is 422.
+- Access is decided by RBAC like every other endpoint (default deny). After deploying:
 
 ```bash
 go run ./cmd/cli endpoint sync
-go run ./cmd/cli group grant --tenant <kode> --group <nama> --all     # atau endpoint tertentu, mis. "GET /api/v1/users"
+go run ./cmd/cli group grant --tenant <code> --group <name> --all     # or specific endpoints, e.g. "GET /api/v1/users"
 ```
 
-Group (`/api/v1/groups`) sudah punya CRUD penuh; hak akses group diatur lewat `/api/v1/groups/:id/endpoints`
-(lihat `docs/rbac.md`).
+Groups (`/api/v1/groups`) already have full CRUD; the permissions of a group are managed through
+`/api/v1/groups/:id/endpoints` (see `docs/rbac.md`).
