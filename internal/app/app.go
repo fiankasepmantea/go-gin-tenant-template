@@ -18,6 +18,7 @@ import (
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/openapi"
 )
 
 // Deps are the things the modules need. For listing routes every field may be left empty.
@@ -65,6 +66,28 @@ func tenantTx(d Deps) gin.HandlerFunc {
 		return middleware.TenantTxWith(d.Router.InTenantTx)
 	}
 	return middleware.TenantTx(d.DB)
+}
+
+// Spec builds the OpenAPI document of the API: the routes of the modules, described by the modules that
+// implement openapi.Documenter, plain entries for the rest.
+func Spec(modules []rest.Module, title, version string) *openapi.Doc {
+	prev := gin.Mode()
+	gin.SetMode(gin.ReleaseMode)
+	defer gin.SetMode(prev)
+
+	r := gin.New()
+	api := r.Group("/api/v1")
+	for _, m := range modules {
+		m.RegisterRoutes(api)
+	}
+	d := openapi.New(title, version)
+	for _, m := range modules {
+		if doc, ok := m.(openapi.Documenter); ok {
+			doc.Document(d)
+		}
+	}
+	d.FillRoutes(r.Routes())
+	return d
 }
 
 // Routes lists the method and route pattern of every route the modules register under /api/v1.

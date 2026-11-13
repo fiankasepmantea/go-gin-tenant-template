@@ -17,7 +17,8 @@ Analogy: one application = one apartment building, each tenant = one resident (a
 | 5e | Generator: `tenantctl make:module` (migration, model, repository, CRUD handler, tests, registration) and `make:migration` ([docs](docs/generator.md)) | **Done** (unit + generated-module build test + integration test) |
 | 5f | gRPC `AuthService` (`Validate`, `Authorize`, TLS/mTLS, same RBAC decision as REST) ([docs](docs/grpc.md)) | **Done** (unit + integration tests) |
 | 5g | Database per tenant (hybrid): dedicated database for chosen tenants, `tenantctl migrate` ([docs](docs/database-per-tenant.md)) | **Done** (unit + two-database integration tests) |
-| 5–7 | Kafka/RabbitMQ, advanced Kubernetes, observability, Swagger | Base files exist, logic not yet |
+| 5h | Observability (request log with user/tenant, Prometheus `/metrics`, `/readyz` with dedicated databases) ([docs](docs/observability.md)) and OpenAPI/Swagger generated from the code ([docs](docs/openapi.md)) | **Done** (unit + integration tests) |
+| 6 | Optional: Asynq, Kafka/RabbitMQ, OpenTelemetry tracing, advanced Kubernetes; template 2 (microservice) | Not started (only when a project needs it) |
 
 ## Prerequisites
 
@@ -32,15 +33,18 @@ make env-init               # create .env.development + a new PASETO_KEY
 make docker-up              # PostgreSQL + Redis
 go mod tidy                 # first time: downloads dependencies & creates go.sum
 make test
+make migrate-dev            # create the tables (Go runner; a database made by hand: see docs/database-per-tenant.md, "baseline")
 make run                    # development mode, http://localhost:8080/healthz
 ```
 
-Create the first tenant and user, then log in: see [docs/authentication.md](docs/authentication.md).
+Then: `go run ./cmd/cli endpoint sync`, create the first tenant and user, and log in: see
+[docs/authentication.md](docs/authentication.md). The API describes itself at http://localhost:8080/docs
+([docs/openapi.md](docs/openapi.md)), metrics are at `/metrics` ([docs/observability.md](docs/observability.md)).
 
 ## Structure
 
 ```
-cmd/                 entry points (server, cli; grpc & worker to follow)
+cmd/                 entry points (server, grpc, cli)
 internal/
   config/            configuration from environment
   platform/          infrastructure: auth (PASETO), database, idgen, logger, tenant, ...
@@ -61,4 +65,4 @@ The rationale for the layout is in [docs/architecture.md](docs/architecture.md).
 
 ## Commands
 
-Development/production modes are described in [docs/environments.md](docs/environments.md). `make help` lists them all: `run`, `build`, `test`, `test-race`, `cover`, `lint`, `vuln`, `docker-up`, `proto`, `migrate-*`.
+Development/production modes are described in [docs/environments.md](docs/environments.md). `make help` lists them all: `run`, `build`, `test`, `test-race`, `cover`, `lint`, `vuln`, `docker-up`, `proto`, `migrate-dev`, `migrate-status`, `new-module`.

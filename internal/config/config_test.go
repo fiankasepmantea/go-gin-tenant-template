@@ -343,3 +343,43 @@ func TestTenantDB(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMetricsConfig(t *testing.T) {
+	setValidEnv(t)
+	cfg, err := fromEnv()
+	if err != nil || !cfg.Metrics.Enabled {
+		t.Fatalf("development: metrics are on by default: %+v %v", cfg.Metrics, err)
+	}
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("DB_PASSWORD", "secret")
+	t.Setenv("DB_SSLMODE", "require")
+	cfg, err = fromEnv()
+	if err != nil || cfg.Metrics.Enabled {
+		t.Fatalf("production: off by default: %+v %v", cfg.Metrics, err)
+	}
+	t.Setenv("METRICS_ENABLED", "true")
+	if _, err := fromEnv(); err == nil || !strings.Contains(err.Error(), "METRICS_TOKEN") {
+		t.Fatalf("production with metrics needs a token: %v", err)
+	}
+	t.Setenv("METRICS_TOKEN", "0123456789abcdef")
+	if _, err := fromEnv(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDocsConfig(t *testing.T) {
+	setValidEnv(t)
+	if cfg, err := fromEnv(); err != nil || !cfg.Docs.Enabled {
+		t.Fatalf("development: on by default: %+v %v", cfg.Docs, err)
+	}
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("DB_PASSWORD", "secret")
+	t.Setenv("DB_SSLMODE", "require")
+	if cfg, err := fromEnv(); err != nil || cfg.Docs.Enabled {
+		t.Fatalf("production: off by default: %+v %v", cfg.Docs, err)
+	}
+	t.Setenv("DOCS_ENABLED", "true")
+	if cfg, err := fromEnv(); err != nil || !cfg.Docs.Enabled {
+		t.Fatalf("production: can be switched on: %+v %v", cfg.Docs, err)
+	}
+}

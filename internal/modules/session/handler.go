@@ -13,6 +13,7 @@ import (
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/openapi"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/response"
 )
 
@@ -54,6 +55,23 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	g.POST("/logout", h.logout)
 	g.GET("/me", h.authenticate, h.me)
 	h.registerPassword(g)
+}
+
+// Document adds the /auth endpoints to the OpenAPI document.
+func (h *Handler) Document(d *openapi.Doc) {
+	const p = "/api/v1/auth"
+	tokens := tokenResponse{}
+	d.Add(openapi.Op{Method: "POST", Path: p + "/login", Summary: "Log in as a user of a tenant (tenant by subdomain, X-Tenant-Code header or tenant_code)", Tag: "auth", Body: loginRequest{}, Result: tokens, Public: true})
+	d.Add(openapi.Op{Method: "POST", Path: p + "/platform/login", Summary: "Log in as a platform admin", Tag: "auth", Body: loginRequest{}, Result: tokens, Public: true})
+	d.Add(openapi.Op{Method: "POST", Path: p + "/refresh", Summary: "Exchange a refresh token for a new pair (rotation; a reused token ends the session)", Tag: "auth", Body: refreshRequest{}, Result: tokens, Public: true})
+	d.Add(openapi.Op{Method: "POST", Path: p + "/logout", Summary: "End the session of a refresh token", Tag: "auth", Body: refreshRequest{}, Kind: openapi.Message, Public: true})
+	d.Add(openapi.Op{Method: "GET", Path: p + "/me", Summary: "Who the access token belongs to", Tag: "auth", Result: map[string]any{}})
+	if h.account != nil {
+		d.Add(openapi.Op{Method: "POST", Path: p + "/password/forgot", Summary: "Ask for a reset link (always 202, whether or not the account exists)", Tag: "auth", Body: forgotRequest{}, Kind: openapi.Message, Status: 202, Public: true})
+		d.Add(openapi.Op{Method: "POST", Path: p + "/platform/password/forgot", Summary: "Ask for a reset link (platform admin)", Tag: "auth", Body: forgotRequest{}, Kind: openapi.Message, Status: 202, Public: true})
+		d.Add(openapi.Op{Method: "POST", Path: p + "/password/reset", Summary: "Set a new password with the token from the e-mail", Tag: "auth", Body: resetRequest{}, Kind: openapi.Message, Public: true})
+		d.Add(openapi.Op{Method: "POST", Path: p + "/password/change", Summary: "Change the password (all sessions end)", Tag: "auth", Body: changeRequest{}, Kind: openapi.Message})
+	}
 }
 
 type loginRequest struct {

@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/config"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/observability"
 )
 
 func testRouter() http.Handler {
@@ -88,5 +89,49 @@ func TestErrorsUseTheSameEnvelope(t *testing.T) {
 				t.Error("error responses must carry X-Request-ID too")
 			}
 		})
+	}
+}
+
+func metricsRouter(cfg config.Config) http.Handler {
+	return NewRouterWith(Options{Config: &cfg, Log: slog.New(slog.DiscardHandler), Metrics: observability.NewRegistry("t")})
+}
+
+func get(h http.Handler, path, auth string) *httptest.ResponseRecorder {
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
+	if auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	return w
+}
+
+func TestMetrics_RouteOnlyWhenEnabled(t *testing.T) {
+	if w := get(metricsRouter(config.Config{Env: "testing"}), "/metrics", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("disabled: %d", w.Code)
+	}
+	h := metricsRouter(config.Config{Env: "testing", Metrics: config.Metrics{Enabled: true, Token: "0123456789abcdef"}})
+	if w := get(h, "/metrics", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("no token: %d", w.Code)
+	}
+	get(h, "/healthz", "")
+	w := get(h, "/metrics", "Bearer 0123456789abcdef")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `http_requests_total{method="GET",route="/healthz",status="200"} 1`) {
+		t.Fatalf("enabled: %d\n%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDocsRoutesOnlyWhenEnabled(t *testing.T) {
+	spec := func(c *gin.Context) { c.String(http.StatusOK, "{}") }
+	on := NewRouterWith(Options{Config: &config.Config{Env: "testing", Docs: config.Docs{Enabled: true}}, Log: slog.New(slog.DiscardHandler), Spec: spec})
+	if w := get(on, "/openapi.json", ""); w.Code != http.StatusOK {
+		t.Fatalf("enabled: %d", w.Code)
+	}
+	if w := get(on, "/docs", ""); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "swagger-ui") {
+		t.Fatalf("docs page: %d", w.Code)
+	}
+	off := NewRouterWith(Options{Config: &config.Config{Env: "testing"}, Log: slog.New(slog.DiscardHandler), Spec: spec})
+	if w := get(off, "/openapi.json", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("disabled: %d", w.Code)
 	}
 }

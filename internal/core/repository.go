@@ -66,7 +66,8 @@ func (r *Repository[T, P]) Create(ctx context.Context, e P) error {
 		}
 		owned.SetTenantID(id) // always overwrites: values from the client are not trusted
 	}
-	if err := database.From(ctx, r.db).Create(e).Error; err != nil {
+	// RETURNING *: columns the database fills (the identity column xxx_unique, defaults) come back in the model
+	if err := database.From(ctx, r.db).Clauses(clause.Returning{}).Create(e).Error; err != nil {
 		return mapErr(e.TableName(), "create", err)
 	}
 	return nil

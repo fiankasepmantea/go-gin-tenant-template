@@ -16,7 +16,7 @@ Error:
 ```json
 {"success": false, "code": 422,
  "error": {"code": "validation_failed", "message": "One or more fields are not valid.",
-           "details": [{"field": "Name", "rule": "required"}]}}
+           "details": [{"field": "name", "rule": "required"}]}}
 ```
 
 - `code` at the top level is the HTTP status. `error.code` is the **stable** machine-readable code: clients

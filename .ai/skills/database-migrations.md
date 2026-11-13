@@ -1,6 +1,6 @@
 # Skill: database migrations
 
-- Tool: golang-migrate. Create: `make migrate-new name=create_xxx`. Apply: `make migrate-up DATABASE_URL=...`.
+- Tool: golang-migrate. Create: `make migrate-new name=create_xxx`. Apply: `make migrate-dev` (Go runner, same `schema_migrations`; also dedicated tenant databases) or `make migrate-up DATABASE_URL=...`.
 - One migration = one logical change; always provide `up` and `down`.
 - Do not edit a migration that has been applied in any environment; create a new one.
 - New tenant-scoped table: copy the standard column pattern from `.ai/skills/create-module.md`, enable RLS.

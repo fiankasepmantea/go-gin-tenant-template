@@ -173,3 +173,27 @@ func TestFailStopsTheChain(t *testing.T) {
 		t.Error("handlers after Fail must not run")
 	}
 }
+
+func TestValidationDetailsUseJSONNames(t *testing.T) {
+	type in struct {
+		Price    int    `json:"price" binding:"required,gt=0"`
+		UnitName string `json:"unit_name,omitempty" binding:"required"`
+		NoTag    string `binding:"required"`
+	}
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	var body in
+	err := c.ShouldBindJSON(&body)
+	e := classify(err, c)
+	var got []string
+	for _, d := range e.Details {
+		got = append(got, d.Field)
+	}
+	want := "price,unit_name,NoTag"
+	if strings.Join(got, ",") != want {
+		t.Fatalf("fields = %v, want %s", got, want)
+	}
+}

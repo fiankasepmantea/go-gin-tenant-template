@@ -11,7 +11,7 @@ LDFLAGS  := -s -w \
 
 .DEFAULT_GOAL := help
 .PHONY: help env-init hooks run build test test-race test-integration cover fmt vet lint vuln tidy keygen \
-        run-grpc docker-up docker-down docker-build proto new-module new-migration migrate-new migrate-up migrate-down
+        run-grpc migrate-dev migrate-status docker-up docker-down docker-build proto new-module new-migration migrate-new migrate-up migrate-down
 
 help: ## Show the list of commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n",$$1,$$2}'
@@ -27,6 +27,12 @@ run: ## Run the REST server for ENV (needs .env.$(ENV))
 
 run-grpc: ## Run the gRPC AuthService (cmd/grpc, GRPC_ADDR, default :9090)
 	APP_ENV=$(ENV) go run ./cmd/grpc
+
+migrate-dev: ## Apply the pending migrations to the shared database of ENV and every TENANT_DB_URL_<REF> (Go runner, no extra tool)
+	APP_ENV=$(ENV) go run ./cmd/cli migrate up --all
+
+migrate-status: ## Show the migration version of each database
+	APP_ENV=$(ENV) go run ./cmd/cli migrate status --all
 
 sync-endpoints: ## Write the routes of the API into the endpoints table (run after migrations, before deploying new routes)
 	APP_ENV=$(ENV) go run ./cmd/cli endpoint sync

@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -197,6 +198,20 @@ func (r *Router) InTenantTx(ctx context.Context, level string, fn func(ctx conte
 		return fmt.Errorf("%w: %q: %w", ErrTenantDatabaseUnavailable, ref, err)
 	}
 	return err
+}
+
+// Stats returns the pool statistics of a dedicated database; zero values while it was not opened yet.
+func (r *Router) Stats(ref string) sql.DBStats {
+	r.mu.Lock()
+	db := r.pools[ref]
+	r.mu.Unlock()
+	if db == nil {
+		return sql.DBStats{}
+	}
+	if sqlDB, err := db.DB(); err == nil {
+		return sqlDB.Stats()
+	}
+	return sql.DBStats{}
 }
 
 // Close closes every dedicated pool. The control database is closed by whoever opened it.
