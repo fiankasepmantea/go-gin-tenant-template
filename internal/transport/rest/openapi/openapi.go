@@ -37,6 +37,12 @@ type Param struct {
 	Name, Description string
 }
 
+// Upload describes a multipart/form-data request body: one file field and optional text fields.
+type Upload struct {
+	File   string // name of the file field
+	Fields []Param
+}
+
 // Op describes one operation.
 type Op struct {
 	Method  string // GET, POST, ...
@@ -48,7 +54,9 @@ type Op struct {
 	Kind    Kind // how Result is wrapped
 	Status  int  // success status (default 200)
 	Query   []Param
-	Public  bool // no bearer token needed
+	Public  bool    // no bearer token needed
+	Upload  *Upload // multipart/form-data body (replaces Body)
+	Binary  bool    // the success response is the content of a file, not JSON
 }
 
 // Doc collects operations and builds the document.
@@ -142,6 +150,15 @@ func (d *Doc) operation(op Op) map[string]any {
 	if op.Body != nil {
 		out["requestBody"] = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": d.sch.of(op.Body)}}}
 	}
+	if op.Upload != nil {
+		props := map[string]any{op.Upload.File: map[string]any{"type": "string", "format": "binary"}}
+		for _, f := range op.Upload.Fields {
+			props[f.Name] = map[string]any{"type": "string", "description": f.Description}
+		}
+		out["requestBody"] = map[string]any{"required": true, "content": map[string]any{"multipart/form-data": map[string]any{
+			"schema": map[string]any{"type": "object", "required": []string{op.Upload.File}, "properties": props},
+		}}}
+	}
 	if op.Public {
 		out["security"] = []any{}
 	} else {
@@ -154,10 +171,13 @@ func (d *Doc) operation(op Op) map[string]any {
 	}
 	resp := map[string]any{}
 	resp[itoa(status)] = map[string]any{"description": http.StatusText(status), "content": map[string]any{"application/json": map[string]any{"schema": d.envelope(op)}}}
+	if op.Binary {
+		resp[itoa(status)] = map[string]any{"description": "the content of the file", "content": map[string]any{"application/octet-stream": map[string]any{"schema": map[string]any{"type": "string", "format": "binary"}}}}
+	}
 	errResp := func(code int, desc string) {
 		resp[itoa(code)] = map[string]any{"description": desc, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/ErrorBody"}}}}
 	}
-	if op.Body != nil {
+	if op.Body != nil || op.Upload != nil {
 		errResp(400, "invalid_request / payload too large (413)")
 		errResp(422, "validation_failed (details lists the fields, named as in the JSON)")
 	}

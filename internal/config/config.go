@@ -35,7 +35,18 @@ type Config struct {
 	TenantDB TenantDB
 	Metrics  Metrics
 	Docs     Docs
+	Storage  Storage
 }
+
+// Storage configures where uploaded files are kept (docs/files.md).
+type Storage struct {
+	Driver     string // STORAGE_DRIVER: "local" (the only one built in; others implement storage.Store)
+	LocalDir   string // STORAGE_DIR: directory of the local driver
+	MaxUploadM int    // UPLOAD_MAX_MB: largest upload, in MiB
+}
+
+// MaxUploadBytes is the largest upload in bytes.
+func (s Storage) MaxUploadBytes() int64 { return int64(s.MaxUploadM) << 20 }
 
 // Docs configures GET /openapi.json and GET /docs. On by default outside production: the description of an API
 // is useful to its developers, and not something to hand to strangers.
@@ -276,6 +287,11 @@ func fromEnv() (*Config, error) {
 			MaxOpenConns: l.int("TENANT_DB_MAX_OPEN_CONNS", 10),
 			MaxIdleConns: l.int("TENANT_DB_MAX_IDLE_CONNS", 2),
 		},
+		Storage: Storage{
+			Driver:     l.str("STORAGE_DRIVER", "local"),
+			LocalDir:   l.str("STORAGE_DIR", "./storage"),
+			MaxUploadM: l.int("UPLOAD_MAX_MB", 10),
+		},
 		Docs: Docs{Enabled: l.bool("DOCS_ENABLED", env != "production")},
 		Metrics: Metrics{
 			Enabled: l.bool("METRICS_ENABLED", env != "production"),
@@ -335,6 +351,15 @@ func (c *Config) Validate() error {
 	}
 	if c.Auth.RefreshTTL <= c.Auth.AccessTTL {
 		errs = append(errs, errors.New("REFRESH_TOKEN_TTL must be greater than ACCESS_TOKEN_TTL"))
+	}
+	if c.Storage.Driver != "local" {
+		errs = append(errs, fmt.Errorf("unknown STORAGE_DRIVER %q (local)", c.Storage.Driver))
+	}
+	if c.Storage.LocalDir == "" {
+		errs = append(errs, errors.New("STORAGE_DIR must not be empty"))
+	}
+	if c.Storage.MaxUploadM < 1 || c.Storage.MaxUploadM > 100 {
+		errs = append(errs, errors.New("UPLOAD_MAX_MB must be between 1 and 100"))
 	}
 	errs = append(errs, c.validateServices()...)
 	errs = append(errs, c.validateTenantDBs()...)

@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/endpoint"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/file"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/group"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/rbac"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/session"
@@ -17,6 +18,7 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/auth"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/storage"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
@@ -25,15 +27,17 @@ import (
 
 // Deps are the things the modules need. For listing routes every field may be left empty.
 type Deps struct {
-	Log      *slog.Logger
-	DB       *gorm.DB
-	Router   *database.Router // nil: every tenant is in DB
-	Tokens   *auth.Manager
-	Sessions *session.Service
-	Account  *session.Account // nil: no password endpoints
-	Resolver tenantctx.Resolver
-	RBAC     rbac.Options
-	Hasher   *password.Hasher // hashes the passwords of users created through the API
+	Log       *slog.Logger
+	DB        *gorm.DB
+	Router    *database.Router // nil: every tenant is in DB
+	Tokens    *auth.Manager
+	Sessions  *session.Service
+	Account   *session.Account // nil: no password endpoints
+	Resolver  tenantctx.Resolver
+	RBAC      rbac.Options
+	Hasher    *password.Hasher // hashes the passwords of users created through the API
+	Storage   storage.Store    // content of uploaded files (nil: only listing routes)
+	MaxUpload int64            // largest upload in bytes (0: file.DefaultMaxBytes)
 }
 
 // Modules creates every module of the API. Routes of tenant data share one middleware chain, in this order:
@@ -60,6 +64,7 @@ func Modules(d Deps) []rest.Module {
 		group.NewHandler(d.DB, chain...),
 		user.NewHandler(user.NewRepository(d.DB), session.NewRepository(d.DB), d.Hasher, chain...),
 		rbac.NewHandler(rbacSvc, group.NewRepository(d.DB), rbac.NewRepository(d.DB), chain...),
+		file.NewHandler(file.NewRepository(d.DB), d.Storage, file.Options{MaxBytes: d.MaxUpload, Log: d.Log}, chain...),
 		// tenantctl:modules (`tenantctl make:module` adds new modules above this line; keep it)
 	}
 }

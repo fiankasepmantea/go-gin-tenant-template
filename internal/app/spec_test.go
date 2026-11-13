@@ -40,3 +40,15 @@ func TestSpec_CoversEveryRoute(t *testing.T) {
 		t.Errorf("group.createInput required = %v", req)
 	}
 }
+
+func TestSpec_DescribesFileUpload(t *testing.T) {
+	raw, err := Spec(Modules(Deps{}), "t", "1").Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"multipart/form-data", `"format": "binary"`, "/api/v1/files/{id}/content", "/api/v1/users/{id}/password"} {
+		if !strings.Contains(strings.ReplaceAll(string(raw), `"format":"binary"`, `"format": "binary"`), want) {
+			t.Errorf("spec lacks %s", want)
+		}
+	}
+}
