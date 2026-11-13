@@ -13,8 +13,10 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/group"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/rbac"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/session"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/user"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/auth"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
@@ -31,6 +33,7 @@ type Deps struct {
 	Account  *session.Account // nil: no password endpoints
 	Resolver tenantctx.Resolver
 	RBAC     rbac.Options
+	Hasher   *password.Hasher // hashes the passwords of users created through the API
 }
 
 // Modules creates every module of the API. Routes of tenant data share one middleware chain, in this order:
@@ -55,6 +58,7 @@ func Modules(d Deps) []rest.Module {
 	return []rest.Module{
 		auth,
 		group.NewHandler(d.DB, chain...),
+		user.NewHandler(user.NewRepository(d.DB), session.NewRepository(d.DB), d.Hasher, chain...),
 		rbac.NewHandler(rbacSvc, group.NewRepository(d.DB), rbac.NewRepository(d.DB), chain...),
 		// tenantctl:modules (`tenantctl make:module` adds new modules above this line; keep it)
 	}
