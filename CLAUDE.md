@@ -6,6 +6,7 @@ Read first: `docs/architecture.md`, `docs/multi-tenancy.md`, `docs/libraries.md`
 
 ## Required
 
+- Everything in the repository is written in English: code, comments, documentation, error messages, commit messages, and pull request descriptions.
 - Follow the official Go guidelines (https://go.dev/doc/) and `gofmt`/`goimports`. Run `make test lint` before finishing.
 - Layout follows `docs/architecture.md`. Organize by feature; no `pkg/`, `utils`, `common`.
 - Every query on a tenant-scoped table **must** use `tenant_id` from the context (`tenant.IDFrom`). Never take it from the body or headers.

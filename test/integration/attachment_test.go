@@ -23,36 +23,36 @@ import (
 
 // The SQL of docs/attachments.md, as an application would put it in its own migration.
 const attachmentSQL = `
-CREATE TABLE kegiatan (
-    kegiatan_id uuid PRIMARY KEY,
+CREATE TABLE activities (
+    activity_id uuid PRIMARY KEY,
     tenant_id   uuid NOT NULL REFERENCES tenants (tenant_id),
-    judul       text NOT NULL,
-    CONSTRAINT kegiatan_tenant_uq UNIQUE (tenant_id, kegiatan_id)
+    title       text NOT NULL,
+    CONSTRAINT activities_tenant_uq UNIQUE (tenant_id, activity_id)
 );
-CREATE TABLE dokumentasi_kegiatan (
-    dokumentasi_kegiatan_id uuid PRIMARY KEY,
+CREATE TABLE activity_documents (
+    activity_document_id uuid PRIMARY KEY,
     tenant_id   uuid NOT NULL,
-    kegiatan_id uuid NOT NULL,
+    activity_id uuid NOT NULL,
     file_id     uuid NOT NULL,
     created_at  timestamptz NOT NULL DEFAULT now(),
-    FOREIGN KEY (tenant_id, kegiatan_id) REFERENCES kegiatan (tenant_id, kegiatan_id) ON DELETE CASCADE,
+    FOREIGN KEY (tenant_id, activity_id) REFERENCES activities (tenant_id, activity_id) ON DELETE CASCADE,
     FOREIGN KEY (tenant_id, file_id) REFERENCES files (tenant_id, file_id),
     UNIQUE (file_id)
 );
-CREATE INDEX dokumentasi_kegiatan_kegiatan_idx ON dokumentasi_kegiatan (tenant_id, kegiatan_id);
-ALTER TABLE kegiatan ENABLE ROW LEVEL SECURITY;
-ALTER TABLE kegiatan FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON kegiatan USING (tenant_id = app_tenant()) WITH CHECK (tenant_id = app_tenant());
-ALTER TABLE dokumentasi_kegiatan ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dokumentasi_kegiatan FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON dokumentasi_kegiatan USING (tenant_id = app_tenant()) WITH CHECK (tenant_id = app_tenant());
+CREATE INDEX activity_documents_activity_idx ON activity_documents (tenant_id, activity_id);
+ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activities FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON activities USING (tenant_id = app_tenant()) WITH CHECK (tenant_id = app_tenant());
+ALTER TABLE activity_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_documents FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON activity_documents USING (tenant_id = app_tenant()) WITH CHECK (tenant_id = app_tenant());
 `
 
 type attEnv struct {
 	*authEnv
-	r        http.Handler
-	blobDir  string
-	kegiatan map[string]string // tenant code -> id of a kegiatan of that tenant
+	r          http.Handler
+	blobDir    string
+	activities map[string]string // tenant code -> id of a activities of that tenant
 }
 
 func setupAttachment(t *testing.T) *attEnv {
@@ -62,7 +62,7 @@ func setupAttachment(t *testing.T) *attEnv {
 	if err := a.owner.Exec(attachmentSQL).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := a.owner.Exec("GRANT SELECT, INSERT, UPDATE, DELETE ON kegiatan, dokumentasi_kegiatan TO " + appRole).Error; err != nil {
+	if err := a.owner.Exec("GRANT SELECT, INSERT, UPDATE, DELETE ON activities, activity_documents TO " + appRole).Error; err != nil {
 		t.Fatal(err)
 	}
 	ids := map[string]string{}
@@ -72,7 +72,7 @@ func setupAttachment(t *testing.T) *attEnv {
 			t.Fatal(err)
 		}
 		kid := "00000000-0000-7000-8000-00000000000" + map[string]string{"tokoa": "1", "tokob": "2"}[code]
-		if err := a.owner.Exec("INSERT INTO kegiatan (kegiatan_id, tenant_id, judul) VALUES (?, ?, 'Ronda')", kid, tid).Error; err != nil {
+		if err := a.owner.Exec("INSERT INTO activities (activity_id, tenant_id, title) VALUES (?, ?, 'Patrol')", kid, tid).Error; err != nil {
 			t.Fatal(err)
 		}
 		ids[code] = kid
@@ -92,16 +92,16 @@ func setupAttachment(t *testing.T) *attEnv {
 	sessions := session.NewHandler(a.svc, tenantctx.Chain(tenantctx.HeaderResolver{}), authn, nil)
 	files := file.NewHandler(repo, blobs, file.Options{}, chain...)
 	docs := attachment.NewHandler(attachment.Config{
-		Name: "dokumentasi", Parent: "kegiatan", Table: "dokumentasi_kegiatan", IDColumn: "dokumentasi_kegiatan_id",
-		ParentTable: "kegiatan", ParentColumn: "kegiatan_id",
+		Name: "documents", Parent: "activities", Table: "activity_documents", IDColumn: "activity_document_id",
+		ParentTable: "activities", ParentColumn: "activity_id",
 	}, a.app, repo, blobs, chain...)
 	r := rest.NewRouter(&config.Config{Env: "testing"}, slog.New(slog.DiscardHandler), a.app, sessions, files, docs)
-	return &attEnv{authEnv: a, r: r, blobDir: blobDir, kegiatan: ids}
+	return &attEnv{authEnv: a, r: r, blobDir: blobDir, activities: ids}
 }
 
 func (e *attEnv) uploadPNG(t *testing.T, tok string) string {
 	t.Helper()
-	body, ct := form(t, "foto.png", pngBytes(500), "purpose", "dokumentasi_kegiatan")
+	body, ct := form(t, "photo.png", pngBytes(500), "purpose", "activity_documents")
 	res := call(t, e.r, http.MethodPost, "/api/v1/files", tok, body, "Content-Type", ct)
 	return fileOf(t, res).ID
 }
@@ -109,7 +109,7 @@ func (e *attEnv) uploadPNG(t *testing.T, tok string) string {
 func TestAttachment_Flow(t *testing.T) {
 	e := setupAttachment(t)
 	tok := login(t, e.r, "/api/v1/auth/login", "tokoa", "alice", "password-of-alice-a")
-	base := "/api/v1/kegiatan/" + e.kegiatan["tokoa"] + "/dokumentasi"
+	base := "/api/v1/activities/" + e.activities["tokoa"] + "/documents"
 
 	if res := call(t, e.r, http.MethodGet, base, tok, ""); res.Status != 200 || !strings.Contains(res.Raw, `"data":[]`) {
 		t.Fatalf("empty list: %d %s", res.Status, res.Raw)
@@ -117,7 +117,7 @@ func TestAttachment_Flow(t *testing.T) {
 
 	fileID := e.uploadPNG(t, tok)
 	res := call(t, e.r, http.MethodPost, base, tok, `{"file_id":"`+fileID+`"}`)
-	if res.Status != 201 || !strings.Contains(res.Raw, "foto.png") || !strings.Contains(res.Raw, "/api/v1/files/"+fileID+"/content") {
+	if res.Status != 201 || !strings.Contains(res.Raw, "photo.png") || !strings.Contains(res.Raw, "/api/v1/files/"+fileID+"/content") {
 		t.Fatalf("attach: %d %s", res.Status, res.Raw)
 	}
 	var item struct {
@@ -159,16 +159,16 @@ func TestAttachment_TenantIsolation(t *testing.T) {
 	e := setupAttachment(t)
 	a := login(t, e.r, "/api/v1/auth/login", "tokoa", "alice", "password-of-alice-a")
 	b := login(t, e.r, "/api/v1/auth/login", "tokob", "alice", "password-of-alice-b")
-	baseA := "/api/v1/kegiatan/" + e.kegiatan["tokoa"] + "/dokumentasi"
-	baseB := "/api/v1/kegiatan/" + e.kegiatan["tokob"] + "/dokumentasi"
+	baseA := "/api/v1/activities/" + e.activities["tokoa"] + "/documents"
+	baseB := "/api/v1/activities/" + e.activities["tokob"] + "/documents"
 
 	fileA := e.uploadPNG(t, a)
-	// tenant B cannot reach the kegiatan of A, nor attach the file of A to its own kegiatan
+	// tenant B cannot reach the activities of A, nor attach the file of A to its own activities
 	if res := call(t, e.r, http.MethodGet, baseA, b, ""); res.Status != 404 {
 		t.Fatalf("list of another tenant: %d", res.Status)
 	}
 	if res := call(t, e.r, http.MethodPost, baseA, b, `{"file_id":"`+e.uploadPNG(t, b)+`"}`); res.Status != 404 {
-		t.Fatalf("attach to a kegiatan of another tenant: %d", res.Status)
+		t.Fatalf("attach to a activities of another tenant: %d", res.Status)
 	}
 	if res := call(t, e.r, http.MethodPost, baseB, b, `{"file_id":"`+fileA+`"}`); res.Status != 422 {
 		t.Fatalf("attach a file of another tenant: %d %s", res.Status, res.Raw)
@@ -176,8 +176,8 @@ func TestAttachment_TenantIsolation(t *testing.T) {
 	// and the database refuses it too when the application layer is bypassed (composite foreign keys)
 	var tidB string
 	_ = e.owner.Raw("SELECT tenant_id FROM tenants WHERE code='tokob'").Scan(&tidB).Error
-	err := e.owner.Exec(`INSERT INTO dokumentasi_kegiatan (dokumentasi_kegiatan_id, tenant_id, kegiatan_id, file_id)
-		VALUES ('00000000-0000-7000-8000-0000000000aa', ?, ?, ?)`, tidB, e.kegiatan["tokob"], fileA).Error
+	err := e.owner.Exec(`INSERT INTO activity_documents (activity_document_id, tenant_id, activity_id, file_id)
+		VALUES ('00000000-0000-7000-8000-0000000000aa', ?, ?, ?)`, tidB, e.activities["tokob"], fileA).Error
 	if err == nil {
 		t.Fatal("the database must refuse a file of another tenant")
 	}
