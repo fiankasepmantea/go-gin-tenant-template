@@ -47,7 +47,7 @@ func (s *schemas) of(v any) map[string]any {
 
 func (s *schemas) typ(t reflect.Type) map[string]any {
 	nullable := false
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t, nullable = t.Elem(), true
 	}
 	out := s.base(t)
@@ -140,7 +140,7 @@ func (s *schemas) fields(t reflect.Type, props map[string]any, required map[stri
 		}
 		if f.Anonymous && name == "" {
 			ft := f.Type
-			for ft.Kind() == reflect.Ptr {
+			for ft.Kind() == reflect.Pointer {
 				ft = ft.Elem()
 			}
 			if ft.Kind() == reflect.Struct {
@@ -177,7 +177,7 @@ func withKey(m map[string]any, k string, v any) map[string]any {
 
 // applyRules maps the binding tag of go-playground/validator to JSON schema keywords. Unknown rules are ignored.
 func applyRules(sc map[string]any, t reflect.Type, rules string) (map[string]any, bool) {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	isStr := t.Kind() == reflect.String

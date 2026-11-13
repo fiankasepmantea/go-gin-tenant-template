@@ -361,7 +361,7 @@ func TestMetricsConfig(t *testing.T) {
 	if _, err := fromEnv(); err == nil || !strings.Contains(err.Error(), "METRICS_TOKEN") {
 		t.Fatalf("production with metrics needs a token: %v", err)
 	}
-	t.Setenv("METRICS_TOKEN", "0123456789abcdef")
+	t.Setenv("METRICS_TOKEN", strings.Repeat("t", 20))
 	if _, err := fromEnv(); err != nil {
 		t.Fatal(err)
 	}

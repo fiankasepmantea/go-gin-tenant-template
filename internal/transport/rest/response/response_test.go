@@ -183,7 +183,7 @@ func TestValidationDetailsUseJSONNames(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
+	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", strings.NewReader(`{}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	var body in
 	err := c.ShouldBindJSON(&body)

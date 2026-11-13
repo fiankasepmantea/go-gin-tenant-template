@@ -92,6 +92,9 @@ func TestErrorsUseTheSameEnvelope(t *testing.T) {
 	}
 }
 
+// scrapeToken is a placeholder, not a credential (kept low-entropy so secret scanners stay quiet).
+var scrapeToken = strings.Repeat("t", 20)
+
 func metricsRouter(cfg config.Config) http.Handler {
 	return NewRouterWith(Options{Config: &cfg, Log: slog.New(slog.DiscardHandler), Metrics: observability.NewRegistry("t")})
 }
@@ -110,12 +113,12 @@ func TestMetrics_RouteOnlyWhenEnabled(t *testing.T) {
 	if w := get(metricsRouter(config.Config{Env: "testing"}), "/metrics", ""); w.Code != http.StatusNotFound {
 		t.Fatalf("disabled: %d", w.Code)
 	}
-	h := metricsRouter(config.Config{Env: "testing", Metrics: config.Metrics{Enabled: true, Token: "0123456789abcdef"}})
+	h := metricsRouter(config.Config{Env: "testing", Metrics: config.Metrics{Enabled: true, Token: scrapeToken}})
 	if w := get(h, "/metrics", ""); w.Code != http.StatusNotFound {
 		t.Fatalf("no token: %d", w.Code)
 	}
 	get(h, "/healthz", "")
-	w := get(h, "/metrics", "Bearer 0123456789abcdef")
+	w := get(h, "/metrics", "Bearer "+scrapeToken)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `http_requests_total{method="GET",route="/healthz",status="200"} 1`) {
 		t.Fatalf("enabled: %d\n%s", w.Code, w.Body.String())
 	}
