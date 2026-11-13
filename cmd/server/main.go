@@ -27,6 +27,7 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/observability"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/ratelimit"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/storage"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/openapi"
@@ -79,6 +80,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	blobs, err := storage.NewLocal(cfg.Storage.LocalDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = blobs.Close() }()
 	limits := session.Limits{Attempts: cfg.Limits.Attempts, Window: cfg.Limits.Window}
 	limiter, closeLimiter := newLimiter(cfg, log)
 	defer closeLimiter()
@@ -108,7 +114,8 @@ func run() error {
 		tenantctx.SubdomainResolver{BaseDomain: cfg.Tenant.BaseDomain},
 		tenantctx.HeaderResolver{Name: cfg.Tenant.Header},
 	)
-	modules := app.Modules(app.Deps{Log: log, DB: db, Router: router, Tokens: tokens, Sessions: sessions, Account: account, Resolver: resolver, Hasher: hasher})
+	modules := app.Modules(app.Deps{Log: log, DB: db, Router: router, Tokens: tokens, Sessions: sessions, Account: account, Resolver: resolver, Hasher: hasher,
+		Storage: blobs, MaxUpload: cfg.Storage.MaxUploadBytes()})
 
 	metrics := observability.NewRegistry(version.Version)
 	if sqlDB, err := db.DB(); err == nil {

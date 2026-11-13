@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/config"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/endpoint"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/rbac"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/storage"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
 )
@@ -24,8 +26,9 @@ import (
 // rbacEnv serves the real module list (app.Modules): Authenticate -> TenantTx -> Authorize.
 type rbacEnv struct {
 	*authEnv
-	r      http.Handler
-	routes []endpoint.Route
+	r       http.Handler
+	routes  []endpoint.Route
+	blobDir string // where the files of the upload tests are kept
 }
 
 func setupRBAC(t *testing.T) *rbacEnv {
@@ -33,14 +36,21 @@ func setupRBAC(t *testing.T) *rbacEnv {
 	a := setupAuth(t)
 	a.seed(t)
 	gin.SetMode(gin.TestMode)
+	blobDir := filepath.Join(t.TempDir(), "files")
+	blobs, err := storage.NewLocal(blobDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = blobs.Close() })
 	modules := app.Modules(app.Deps{
+		Storage: blobs, MaxUpload: 64 << 10,
 		Log: slog.New(slog.DiscardHandler), DB: a.app, Tokens: a.mgr, Sessions: a.svc,
 		Resolver: tenantctx.Chain(tenantctx.HeaderResolver{}), Hasher: fastHasher(t),
 		// tiny lifetimes: changes made by the CLI (another process in production) show up quickly
 		RBAC: rbac.Options{EndpointTTL: time.Millisecond, AccessTTL: time.Millisecond},
 	})
 	r := rest.NewRouter(&config.Config{Env: "testing"}, slog.New(slog.DiscardHandler), a.app, modules...)
-	return &rbacEnv{authEnv: a, r: r, routes: app.Routes(modules)}
+	return &rbacEnv{authEnv: a, r: r, routes: app.Routes(modules), blobDir: blobDir}
 }
 
 func (e *rbacEnv) sync(t *testing.T) {
