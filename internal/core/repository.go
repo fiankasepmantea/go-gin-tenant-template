@@ -283,3 +283,7 @@ func mapErr(table, op string, err error) error {
 	}
 	return fmt.Errorf("%s: %s: %w", table, op, err)
 }
+
+// MapError translates a PostgreSQL error (unique, foreign key, not null, check, bad input) into the errors of
+// this package, for modules that run their own queries. table and op only decorate the message.
+func MapError(table, op string, err error) error { return mapErr(table, op, err) }

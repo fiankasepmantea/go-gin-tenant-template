@@ -59,3 +59,5 @@ Buat tipe baru yang memenuhi interface itu, misalnya `storage.S3`, lalu pilih di
 - Jika commit database gagal setelah isi file tersimpan, isi file bisa menjadi yatim (tanpa baris). Ini jarang
   terjadi dan tidak berbahaya: nama filenya acak dan tidak bisa diakses lewat API.
 - Tidak ada dukungan `Range` (unduh sebagian). Ditambahkan bila ada kebutuhan streaming video.
+
+Untuk melampirkan banyak file ke sebuah record (foto kegiatan, dokumen kasus), lihat `docs/attachments.md`.
