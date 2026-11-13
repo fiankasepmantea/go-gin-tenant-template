@@ -35,7 +35,7 @@ func setupRBAC(t *testing.T) *rbacEnv {
 	gin.SetMode(gin.TestMode)
 	modules := app.Modules(app.Deps{
 		Log: slog.New(slog.DiscardHandler), DB: a.app, Tokens: a.mgr, Sessions: a.svc,
-		Resolver: tenantctx.Chain(tenantctx.HeaderResolver{}),
+		Resolver: tenantctx.Chain(tenantctx.HeaderResolver{}), Hasher: fastHasher(t),
 		// tiny lifetimes: changes made by the CLI (another process in production) show up quickly
 		RBAC: rbac.Options{EndpointTTL: time.Millisecond, AccessTTL: time.Millisecond},
 	})

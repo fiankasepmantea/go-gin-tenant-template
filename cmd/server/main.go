@@ -108,7 +108,7 @@ func run() error {
 		tenantctx.SubdomainResolver{BaseDomain: cfg.Tenant.BaseDomain},
 		tenantctx.HeaderResolver{Name: cfg.Tenant.Header},
 	)
-	modules := app.Modules(app.Deps{Log: log, DB: db, Router: router, Tokens: tokens, Sessions: sessions, Account: account, Resolver: resolver})
+	modules := app.Modules(app.Deps{Log: log, DB: db, Router: router, Tokens: tokens, Sessions: sessions, Account: account, Resolver: resolver, Hasher: hasher})
 
 	metrics := observability.NewRegistry(version.Version)
 	if sqlDB, err := db.DB(); err == nil {
