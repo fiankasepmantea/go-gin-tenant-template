@@ -43,7 +43,7 @@ func setupRBAC(t *testing.T) *rbacEnv {
 	}
 	t.Cleanup(func() { _ = blobs.Close() })
 	modules := app.Modules(app.Deps{
-		Storage: blobs, MaxUpload: 64 << 10,
+		Storage: blobs, MaxUpload: 64 << 10, MaxAPK: 256 << 10,
 		Log: slog.New(slog.DiscardHandler), DB: a.app, Tokens: a.mgr, Sessions: a.svc,
 		Resolver: tenantctx.Chain(tenantctx.HeaderResolver{}), Hasher: fastHasher(t),
 		// tiny lifetimes: changes made by the CLI (another process in production) show up quickly

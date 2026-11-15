@@ -43,10 +43,14 @@ type Storage struct {
 	Driver     string // STORAGE_DRIVER: "local" (the only one built in; others implement storage.Store)
 	LocalDir   string // STORAGE_DIR: directory of the local driver
 	MaxUploadM int    // UPLOAD_MAX_MB: largest upload, in MiB
+	MaxAPKM    int    // UPLOAD_APK_MAX_MB: largest app package (APK), in MiB
 }
 
 // MaxUploadBytes is the largest upload in bytes.
 func (s Storage) MaxUploadBytes() int64 { return int64(s.MaxUploadM) << 20 }
+
+// MaxAPKBytes is the largest app package in bytes.
+func (s Storage) MaxAPKBytes() int64 { return int64(s.MaxAPKM) << 20 }
 
 // Docs configures GET /openapi.json and GET /docs. On by default outside production: the description of an API
 // is useful to its developers, and not something to hand to strangers.
@@ -291,6 +295,7 @@ func fromEnv() (*Config, error) {
 			Driver:     l.str("STORAGE_DRIVER", "local"),
 			LocalDir:   l.str("STORAGE_DIR", "./storage"),
 			MaxUploadM: l.int("UPLOAD_MAX_MB", 10),
+			MaxAPKM:    l.int("UPLOAD_APK_MAX_MB", 200),
 		},
 		Docs: Docs{Enabled: l.bool("DOCS_ENABLED", env != "production")},
 		Metrics: Metrics{
@@ -360,6 +365,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Storage.MaxUploadM < 1 || c.Storage.MaxUploadM > 100 {
 		errs = append(errs, errors.New("UPLOAD_MAX_MB must be between 1 and 100"))
+	}
+	if c.Storage.MaxAPKM < 1 || c.Storage.MaxAPKM > 1000 {
+		errs = append(errs, errors.New("UPLOAD_APK_MAX_MB must be between 1 and 1000"))
 	}
 	errs = append(errs, c.validateServices()...)
 	errs = append(errs, c.validateTenantDBs()...)
