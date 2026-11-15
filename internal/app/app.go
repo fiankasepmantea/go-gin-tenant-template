@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/appversion"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/endpoint"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/file"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/group"
@@ -38,6 +39,7 @@ type Deps struct {
 	Hasher    *password.Hasher // hashes the passwords of users created through the API
 	Storage   storage.Store    // content of uploaded files (nil: only listing routes)
 	MaxUpload int64            // largest upload in bytes (0: file.DefaultMaxBytes)
+	MaxAPK    int64            // largest app package in bytes (0: appversion.DefaultMaxPackageBytes)
 }
 
 // Modules creates every module of the API. Routes of tenant data share one middleware chain, in this order:
@@ -67,6 +69,7 @@ func Modules(d Deps) []rest.Module {
 		user.NewHandler(user.NewService(user.NewRepository(d.DB), session.NewRepository(d.DB), d.Hasher), chain...),
 		rbac.NewHandler(rbacSvc, group.NewRepository(d.DB), rbac.NewRepository(d.DB), chain...),
 		file.NewHandler(files, chain...),
+		appversion.NewHandler(appversion.NewService(appversion.NewRepository(d.DB), d.Storage, appversion.Options{MaxPackageBytes: d.MaxAPK, Log: d.Log}), chain...),
 		// tenantctl:modules (`tenantctl make:module` adds new modules above this line; keep it)
 	}
 }

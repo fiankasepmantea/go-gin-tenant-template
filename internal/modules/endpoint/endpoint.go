@@ -28,13 +28,24 @@ const (
 const APIPrefix = "/api/v1/"
 
 // skipPrefixes are routes that RBAC never decides: they are public or run their own authentication.
-var skipPrefixes = []string{APIPrefix + "auth/"}
+//
+// /api/v1/public/ holds the routes that anybody may call without a token (an app that asks for the latest
+// version before login). They never run the Authorize middleware, so there is nothing to synchronize.
+var skipPrefixes = []string{APIPrefix + "auth/", APIPrefix + "public/"}
 
 // overrides are the endpoints whose scope or is_public differs from the default (tenant, not public).
 // Add an entry here when a route must be public to every authenticated user, or reserved for platform admins:
 //
 //	"GET /api/v1/tenants": {Scope: ScopePlatform},
-var overrides = map[string]Setting{}
+var overrides = map[string]Setting{
+	// app versions are global: only platform admins manage them (the app reads them through /public/)
+	"GET /api/v1/app-versions":             {Scope: ScopePlatform},
+	"POST /api/v1/app-versions":            {Scope: ScopePlatform},
+	"GET /api/v1/app-versions/:id":         {Scope: ScopePlatform},
+	"PATCH /api/v1/app-versions/:id":       {Scope: ScopePlatform},
+	"DELETE /api/v1/app-versions/:id":      {Scope: ScopePlatform},
+	"PUT /api/v1/app-versions/:id/package": {Scope: ScopePlatform},
+}
 
 // Setting is the access rule of one endpoint, apart from the group grants.
 type Setting struct {
