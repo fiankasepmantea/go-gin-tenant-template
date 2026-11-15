@@ -1,10 +1,7 @@
 package group
 
 import (
-	"strings"
-
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/crud"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/openapi"
@@ -21,7 +18,8 @@ type updateInput struct { // pointers: nil means "not sent"
 	Description *string `json:"description" binding:"omitempty,max=500"`
 }
 
-// Handler serves /groups with the standard endpoints of crud.Handler.
+// Handler serves /groups with the standard endpoints of crud.Handler. It reads the request and writes the
+// response; the rules are in the Service.
 type Handler struct {
 	h  *crud.Handler[Group, *Group, createInput, updateInput]
 	mw []gin.HandlerFunc
@@ -29,18 +27,18 @@ type Handler struct {
 
 // NewHandler creates the handler. mw runs before every endpoint; pass the authentication chain
 // (Authenticate, TenantTx, Authorize) here. The handler itself decides nothing about who may call it.
-func NewHandler(db *gorm.DB, mw ...gin.HandlerFunc) *Handler {
+func NewHandler(svc *Service, mw ...gin.HandlerFunc) *Handler {
 	h := crud.New(crud.Config[Group, *Group, createInput, updateInput]{
-		Store:      NewRepository(db),
+		Store:      svc,
 		Filterable: []string{"name"},
 		Sortable:   []string{"name", "created_at"},
 		Build: func(in createInput) *Group {
-			return &Group{Name: strings.TrimSpace(in.Name), Description: in.Description}
+			return &Group{Name: in.Name, Description: in.Description}
 		},
 		Changes: func(in updateInput) map[string]any {
 			m := map[string]any{}
 			if in.Name != nil {
-				m["name"] = strings.TrimSpace(*in.Name)
+				m["name"] = *in.Name
 			}
 			if in.Description != nil {
 				m["description"] = *in.Description

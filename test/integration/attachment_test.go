@@ -88,13 +88,13 @@ func setupAttachment(t *testing.T) *attEnv {
 	gin.SetMode(gin.TestMode)
 	authn := middleware.Authenticate(a.mgr)
 	chain := []gin.HandlerFunc{authn, middleware.TenantTx(a.app)}
-	repo := file.NewRepository(a.app)
+	fileSvc := file.NewService(file.NewRepository(a.app), blobs, file.Options{})
 	sessions := session.NewHandler(a.svc, tenantctx.Chain(tenantctx.HeaderResolver{}), authn, nil)
-	files := file.NewHandler(repo, blobs, file.Options{}, chain...)
-	docs := attachment.NewHandler(attachment.Config{
+	files := file.NewHandler(fileSvc, chain...)
+	docs := attachment.NewHandler(attachment.NewService(attachment.Config{
 		Name: "documents", Parent: "activities", Table: "activity_documents", IDColumn: "activity_document_id",
 		ParentTable: "activities", ParentColumn: "activity_id",
-	}, a.app, repo, blobs, chain...)
+	}, a.app, fileSvc), chain...)
 	r := rest.NewRouter(&config.Config{Env: "testing"}, slog.New(slog.DiscardHandler), a.app, sessions, files, docs)
 	return &attEnv{authEnv: a, r: r, blobDir: blobDir, activities: ids}
 }
@@ -189,6 +189,6 @@ func TestAttachment_BadConfigPanics(t *testing.T) {
 			t.Fatal("a table name with SQL in it must be refused")
 		}
 	}()
-	attachment.NewHandler(attachment.Config{Name: "x", Parent: "y", Table: "t; drop table users", IDColumn: "i",
-		ParentTable: "p", ParentColumn: "c"}, nil, nil, nil)
+	attachment.NewService(attachment.Config{Name: "x", Parent: "y", Table: "t; drop table users", IDColumn: "i",
+		ParentTable: "p", ParentColumn: "c"}, nil, nil)
 }

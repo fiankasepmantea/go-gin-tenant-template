@@ -18,7 +18,7 @@ const appFile = "internal/app/app.go"
 // source and does not write it. Registering twice is an error.
 func RegisterModule(src []byte, modulePath, name string) ([]byte, error) {
 	importLine := fmt.Sprintf("\t%q\n", modulePath+"/internal/modules/"+name)
-	call := fmt.Sprintf("\t\t%s.NewHandler(d.DB, chain...),\n", name)
+	call := fmt.Sprintf("\t\t%[1]s.NewHandler(%[1]s.NewService(%[1]s.NewRepository(d.DB)), chain...),\n", name)
 	text := string(src)
 	if strings.Contains(text, importLine) || strings.Contains(text, call) {
 		return nil, fmt.Errorf("%s already registers the module %q", appFile, name)

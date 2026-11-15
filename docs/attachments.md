@@ -36,14 +36,14 @@ CREATE POLICY tenant_isolation ON activity_documents
     USING (tenant_id = app_tenant()) WITH CHECK (tenant_id = app_tenant());
 ```
 
-**2. Register the handler** in `internal/app/app.go`, above the `// tenantctl:modules` line:
+**2. Register the handler** in `internal/app/app.go`, above the `// tenantctl:modules` line (`files` is the file service that `Modules` already creates for the `/files` routes):
 
 ```go
-attachment.NewHandler(attachment.Config{
+attachment.NewHandler(attachment.NewService(attachment.Config{
     Name: "documents", Parent: "activities",
     Table: "activity_documents", IDColumn: "activity_document_id",
     ParentTable: "activities", ParentColumn: "activity_id",
-}, d.DB, file.NewRepository(d.DB), d.Storage, chain...),
+}, d.DB, files), chain...),
 ```
 
 For a second table repeat this with other table and column names. Then run `endpoint sync` and `group grant`.
