@@ -50,10 +50,11 @@ that are SQL keywords or that the template creates itself (`id`, `tenant_id`, `c
 | `migrations/NNNNNN_create_<table>.up.sql` / `.down.sql` | table with `<name>_id` (uuid), `<name>_unique` (identity), `tenant_id` (FK, NOT NULL), your columns, timestamps, `deleted_at`, an index on `tenant_id`, the unique indexes, the `updated_at` trigger, `ENABLE` + `FORCE ROW LEVEL SECURITY` and the `tenant_isolation` policy |
 | `internal/modules/<name>/model.go` | GORM model with the methods `crud` needs |
 | `internal/modules/<name>/repository.go` | `core.Repository` (automatic tenant filter); add your queries here |
-| `internal/modules/<name>/handler.go` | `crud.Handler` with input DTOs, filter and sort whitelists, `Build` and `Changes` |
+| `internal/modules/<name>/service.go` | the business rules (thin at first: it passes calls on; add your rules here). Handler calls Service, Service calls Repository |
+| `internal/modules/<name>/handler.go` | `crud.Handler` with input DTOs, filter and sort whitelists, `Build` and `Changes`; no business rules |
 | `internal/modules/<name>/handler_test.go` | the 7 routes exist; validation of the inputs |
 | `test/integration/<name>_test.go` | on PostgreSQL: default deny, grant, create, duplicate, list, get, update, validation, tenant B cannot see or change tenant A's record, soft delete |
-| `internal/app/app.go` | the import and `<name>.NewHandler(d.DB, chain...)` in `app.Modules` (above the `// tenantctl:modules` comment: keep that comment) |
+| `internal/app/app.go` | the import and `<name>.NewHandler(<name>.NewService(<name>.NewRepository(d.DB)), chain...)` in `app.Modules` (above the `// tenantctl:modules` comment: keep that comment) |
 
 The migration number is the highest number in `migrations/` plus one, so migrations made with `make migrate-new` or by hand and
 migrations of the generator share one sequence.

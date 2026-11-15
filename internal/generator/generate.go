@@ -130,6 +130,7 @@ func ModuleFiles(root string, s *ModuleSpec) ([]File, error) {
 		{mig + ".down.sql", tmplDown, false},
 		{dir + "model.go", tmplModel, true},
 		{dir + "repository.go", tmplRepository, true},
+		{dir + "service.go", tmplService, true},
 		{dir + "handler.go", tmplHandler, true},
 		{dir + "handler_test.go", tmplHandlerTest, true},
 		{"test/integration/" + s.Name + "_test.go", tmplIntegration, true},

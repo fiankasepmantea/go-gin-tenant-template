@@ -148,7 +148,7 @@ func TestRegisterModuleKeepsImportsSortedAndRefusesTwice(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(out)
-	if !strings.Contains(got, "\t\tinvoice.NewHandler(d.DB, chain...),\n\t\t"+Marker) {
+	if !strings.Contains(got, "\t\tinvoice.NewHandler(invoice.NewService(invoice.NewRepository(d.DB)), chain...),\n\t\t"+Marker) {
 		t.Errorf("handler line is not right above the marker:\n%s", got)
 	}
 	iInv := strings.Index(got, `"example.com/shop/internal/modules/invoice"`)
@@ -190,7 +190,7 @@ func TestModuleFilesRenderValidGoForEveryType(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v: %v", c.fields, err)
 		}
-		if len(files) != 7 || files[0].Path != "migrations/000008_create_things.up.sql" {
+		if len(files) != 8 || files[0].Path != "migrations/000008_create_things.up.sql" {
 			t.Fatalf("files: %+v", files)
 		}
 	}

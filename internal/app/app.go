@@ -53,6 +53,8 @@ func Modules(d Deps) []rest.Module {
 	rbacSvc := rbac.NewService(endpoint.NewRepository(d.DB), rbac.NewRepository(d.DB), d.RBAC)
 	chain := []gin.HandlerFunc{authn, tenantTx(d), middleware.Authorize(rbacSvc, d.Log)}
 
+	files := file.NewService(file.NewRepository(d.DB), d.Storage, file.Options{MaxBytes: d.MaxUpload, Log: d.Log})
+
 	// /auth/*: public login endpoints; they authenticate themselves and are not decided by RBAC.
 	auth := session.NewHandler(d.Sessions, d.Resolver, authn, d.Log)
 	if d.Account != nil {
@@ -61,10 +63,10 @@ func Modules(d Deps) []rest.Module {
 
 	return []rest.Module{
 		auth,
-		group.NewHandler(d.DB, chain...),
-		user.NewHandler(user.NewRepository(d.DB), session.NewRepository(d.DB), d.Hasher, chain...),
+		group.NewHandler(group.NewService(group.NewRepository(d.DB)), chain...),
+		user.NewHandler(user.NewService(user.NewRepository(d.DB), session.NewRepository(d.DB), d.Hasher), chain...),
 		rbac.NewHandler(rbacSvc, group.NewRepository(d.DB), rbac.NewRepository(d.DB), chain...),
-		file.NewHandler(file.NewRepository(d.DB), d.Storage, file.Options{MaxBytes: d.MaxUpload, Log: d.Log}, chain...),
+		file.NewHandler(files, chain...),
 		// tenantctl:modules (`tenantctl make:module` adds new modules above this line; keep it)
 	}
 }

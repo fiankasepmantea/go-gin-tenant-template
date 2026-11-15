@@ -84,6 +84,52 @@ func NewRepository(db *gorm.DB) *Repository {
 }
 `
 
+const tmplService = `package {{.Name}}
+
+import (
+	"context"
+
+	"{{.Path}}/internal/core"
+)
+
+// Store is what the service needs from the data layer. *Repository satisfies it, and a test can pass a fake.
+type Store interface {
+	Create(ctx context.Context, e *{{.Type}}) error
+	GetByID(ctx context.Context, id string) (*{{.Type}}, error)
+	List(ctx context.Context, p core.ListParams) (core.Page[{{.Type}}], error)
+	Update(ctx context.Context, id string, fields map[string]any) error
+	Delete(ctx context.Context, id string) error
+}
+
+// Service holds the business rules of the {{.Name}} module. The handler calls the service, the service calls the
+// repository: the handler only reads input and writes responses, the repository only talks to the database.
+//
+// The methods below only pass the call on. Put a rule where it belongs: normalization, checks that need other
+// records, work that must happen in one transaction, side effects such as sending a message.
+type Service struct {
+	store Store
+}
+
+// NewService creates the service.
+func NewService(store Store) *Service { return &Service{store: store} }
+
+func (s *Service) Create(ctx context.Context, e *{{.Type}}) error { return s.store.Create(ctx, e) }
+
+func (s *Service) GetByID(ctx context.Context, id string) (*{{.Type}}, error) {
+	return s.store.GetByID(ctx, id)
+}
+
+func (s *Service) List(ctx context.Context, p core.ListParams) (core.Page[{{.Type}}], error) {
+	return s.store.List(ctx, p)
+}
+
+func (s *Service) Update(ctx context.Context, id string, fields map[string]any) error {
+	return s.store.Update(ctx, id, fields)
+}
+
+func (s *Service) Delete(ctx context.Context, id string) error { return s.store.Delete(ctx, id) }
+`
+
 var tmplHandler = tick(`package {{.Name}}
 
 import (
@@ -95,7 +141,6 @@ import (
 {{- end}}
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"{{.Path}}/internal/transport/rest/crud"
 	"{{.Path}}/internal/transport/rest/openapi"
@@ -114,7 +159,8 @@ type updateInput struct { // pointers: nil means "not sent"
 {{- end}}
 }
 
-// Handler serves /{{.Table}} with the standard endpoints of crud.Handler.
+// Handler serves /{{.Table}} with the standard endpoints of crud.Handler. It reads the request and writes the
+// response; the rules are in the Service.
 type Handler struct {
 	h  *crud.Handler[{{.Type}}, *{{.Type}}, createInput, updateInput]
 	mw []gin.HandlerFunc
@@ -122,9 +168,9 @@ type Handler struct {
 
 // NewHandler creates the handler. mw runs before every endpoint; pass the authentication chain
 // (Authenticate, TenantTx, Authorize) here. The handler itself decides nothing about who may call it.
-func NewHandler(db *gorm.DB, mw ...gin.HandlerFunc) *Handler {
+func NewHandler(svc *Service, mw ...gin.HandlerFunc) *Handler {
 	h := crud.New(crud.Config[{{.Type}}, *{{.Type}}, createInput, updateInput]{
-		Store:      NewRepository(db),
+		Store:      svc,
 		Filterable: []string{ {{- range $i, $c := .FilterCols}}{{if $i}}, {{end}}{{quote $c}}{{end -}} },
 		Sortable:   []string{ {{- range $i, $c := .SortCols}}{{if $i}}, {{end}}{{quote $c}}{{end -}} },
 		Build: func(in createInput) *{{.Type}} {
