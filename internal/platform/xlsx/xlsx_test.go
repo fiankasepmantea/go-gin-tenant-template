@@ -70,7 +70,7 @@ func TestWriteThenRead(t *testing.T) {
 	}
 	want := map[int][]string{1: {"a", "b"}, 2: {"x < y & \"z\""}, 3: {"", "last", "tail"}, 4: {" spaced  "}}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("got %q want %q", got, want)
+		t.Fatalf("got %v want %v", got, want)
 	}
 }
 
@@ -113,7 +113,7 @@ func TestRead_SharedStringsRichTextAndTypes(t *testing.T) {
 func TestRead_UsesTheFirstSheetInWorkbookOrder(t *testing.T) {
 	got, err := rowsOf(t, zipOf(t, book(`<row r="1"><c r="A1" t="inlineStr"><is><t>first</t></is></c></row>`, "")), Limits{})
 	if err != nil || got[1][0] != "first" {
-		t.Fatalf("%q %v", got, err)
+		t.Fatalf("%v %v", got, err)
 	}
 }
 
@@ -132,7 +132,7 @@ func TestRead_Limits(t *testing.T) {
 	// columns beyond the limit are ignored, not allocated
 	got, err := rowsOf(t, zipOf(t, book(`<row r="1"><c r="A1"><v>a</v></c><c r="XFD1"><v>far</v></c></row>`, "")), Limits{MaxColumns: 8})
 	if err != nil || len(got[1]) != 1 {
-		t.Errorf("far column: %q %v", got, err)
+		t.Errorf("far column: %v %v", got, err)
 	}
 	// a part that unpacks to more than the limit
 	huge := book(`<row r="1"><c r="A1" t="inlineStr"><is><t>`+strings.Repeat("a", 4000)+`</t></is></c></row>`, "")
