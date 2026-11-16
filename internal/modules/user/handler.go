@@ -38,13 +38,14 @@ type passwordInput struct {
 // JSON tag).
 type Handler struct {
 	svc  *Service
+	imp  *Importer
 	mw   []gin.HandlerFunc
 	base string
 }
 
 // NewHandler creates the handler. mw runs before every endpoint (Authenticate, TenantTx, Authorize).
-func NewHandler(svc *Service, mw ...gin.HandlerFunc) *Handler {
-	return &Handler{svc: svc, mw: mw}
+func NewHandler(svc *Service, imp *Importer, mw ...gin.HandlerFunc) *Handler {
+	return &Handler{svc: svc, imp: imp, mw: mw}
 }
 
 var userPolicy = request.ListPolicy{
@@ -57,6 +58,8 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	h.base = rg.BasePath() + "/users"
 	g := rg.Group("/users", h.mw...)
 	g.GET("", h.list)
+	g.GET("/import/template", h.importTemplate)
+	g.POST("/import", h.importUsers)
 	g.GET("/:id", h.get)
 	g.POST("", h.create)
 	g.PATCH("/:id", h.update)
@@ -84,6 +87,10 @@ func (h *Handler) Document(d *openapi.Doc) {
 	d.Add(openapi.Op{Method: "POST", Path: h.base, Summary: "Create a user in the tenant", Tag: tag, Body: createInput{}, Result: u, Status: 201})
 	d.Add(openapi.Op{Method: "PATCH", Path: h.base + "/:id", Summary: "Change a user (send only what changes; group_id \"\" removes the group). Deactivating ends the sessions", Tag: tag, Body: updateInput{}, Result: u})
 	d.Add(openapi.Op{Method: "DELETE", Path: h.base + "/:id", Summary: "Delete a user and end the sessions", Tag: tag, Kind: openapi.Message})
+	d.Add(openapi.Op{Method: "GET", Path: h.base + "/import/template", Summary: "Download the .xlsx template for importing users", Tag: tag, Binary: true})
+	d.Add(openapi.Op{Method: "POST", Path: h.base + "/import", Tag: tag, Result: ImportResult{}, Status: 200,
+		Summary: "Create many users from an .xlsx file (multipart/form-data, field file; dry_run=true only checks). All or nothing: any invalid row, nothing is created",
+		Upload:  &openapi.Upload{File: "file", Fields: []openapi.Param{{Name: "dry_run", Description: "true: check the file, create nothing"}}}})
 	d.Add(openapi.Op{Method: "POST", Path: h.base + "/:id/password", Summary: "Set a new password for a user and end the sessions", Tag: tag, Body: passwordInput{}, Kind: openapi.Message})
 }
 
