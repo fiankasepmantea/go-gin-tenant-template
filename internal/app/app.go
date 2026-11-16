@@ -4,6 +4,7 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/gin-gonic/gin"
@@ -66,7 +67,7 @@ func Modules(d Deps) []rest.Module {
 	return []rest.Module{
 		auth,
 		group.NewHandler(group.NewService(group.NewRepository(d.DB)), chain...),
-		user.NewHandler(user.NewService(user.NewRepository(d.DB), session.NewRepository(d.DB), d.Hasher), chain...),
+		userModule(d, chain),
 		rbac.NewHandler(rbacSvc, group.NewRepository(d.DB), rbac.NewRepository(d.DB), chain...),
 		file.NewHandler(files, chain...),
 		appversion.NewHandler(appversion.NewService(appversion.NewRepository(d.DB), d.Storage, appversion.Options{MaxPackageBytes: d.MaxAPK, Log: d.Log}), chain...),
@@ -122,4 +123,19 @@ func Routes(modules []rest.Module) []endpoint.Route {
 		out = append(out, endpoint.Route{Method: ri.Method, Path: ri.Path})
 	}
 	return out
+}
+
+// userModule wires /users with its importer. The importer finds groups by name through the group repository.
+func userModule(d Deps, chain []gin.HandlerFunc) *user.Handler {
+	users := user.NewRepository(d.DB)
+	svc := user.NewService(users, session.NewRepository(d.DB), d.Hasher)
+	groups := group.NewRepository(d.DB)
+	lookup := func(ctx context.Context, name string) (string, error) {
+		g, err := groups.FindByName(ctx, name)
+		if err != nil {
+			return "", err
+		}
+		return g.ID, nil
+	}
+	return user.NewHandler(svc, user.NewImporter(svc, users, lookup), chain...)
 }

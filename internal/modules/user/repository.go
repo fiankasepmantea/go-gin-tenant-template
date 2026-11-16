@@ -126,3 +126,27 @@ func notFound(err error) error {
 	}
 	return err
 }
+
+// Taken tells which of the given usernames and e-mail addresses (lower case) already belong to a user of the
+// tenant in the context, deleted users excluded. The result maps are keyed by the lower-case value.
+func (r *Repository) Taken(ctx context.Context, usernames, emails []string) (usernamesTaken, emailsTaken map[string]bool, err error) {
+	usernamesTaken, emailsTaken = map[string]bool{}, map[string]bool{}
+	if len(usernames) == 0 && len(emails) == 0 {
+		return usernamesTaken, emailsTaken, nil
+	}
+	conn, err := r.Conn(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	var found []struct{ Username, Email string }
+	err = conn.Select("lower(username) AS username, lower(email) AS email").
+		Where("deleted_at IS NULL AND (lower(username) IN ? OR lower(email) IN ?)", usernames, emails).Find(&found).Error
+	if err != nil {
+		return nil, nil, fmt.Errorf("users: check taken: %w", err)
+	}
+	for _, f := range found {
+		usernamesTaken[f.Username] = true
+		emailsTaken[f.Email] = true
+	}
+	return usernamesTaken, emailsTaken, nil
+}

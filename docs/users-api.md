@@ -34,3 +34,5 @@ go run ./cmd/cli group grant --tenant <code> --group <name> --all     # or speci
 
 Groups (`/api/v1/groups`) already have full CRUD; the permissions of a group are managed through
 `/api/v1/groups/:id/endpoints` (see `docs/rbac.md`).
+
+To create many users at once from a spreadsheet, see [users-import.md](users-import.md).
