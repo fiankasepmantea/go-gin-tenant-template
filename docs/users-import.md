@@ -47,6 +47,6 @@ transaction, so a failure halfway also creates nothing.
 ## Limits
 
 - File size: 5 MiB (413 above). At most 500 users per file. Larger imports: split the file.
-- The file is read in memory with limits on the unpacked size, so a zip bomb is refused.
+- The file is read by `internal/platform/xlsx`, which uses only the Go standard library: formulas are never evaluated, entities are not expanded, and limits apply to the unpacked size, rows and columns, so a zip bomb or a huge sheet is refused. It reads text, numbers and booleans of the first sheet; an encrypted workbook is refused.
 - Hashing a password is slow on purpose, so a full file of 500 users takes a few seconds.
 - Passwords are in the file in clear text: tell people to delete it after the import.

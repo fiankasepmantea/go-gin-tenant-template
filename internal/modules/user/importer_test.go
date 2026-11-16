@@ -1,36 +1,24 @@
 package user
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/xuri/excelize/v2"
-
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/core"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/xlsx"
 )
 
 // workbook builds an .xlsx file: the first slice is the header row, the others are data rows.
 func workbook(t *testing.T, header []string, rows ...[]string) []byte {
 	t.Helper()
-	f := excelize.NewFile()
-	all := append([][]string{header}, rows...)
-	for r, row := range all {
-		for c, v := range row {
-			name, _ := excelize.CoordinatesToCellName(c+1, r+1)
-			if err := f.SetCellValue("Sheet1", name, v); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	var buf bytes.Buffer
-	if err := f.Write(&buf); err != nil {
+	data, err := xlsx.Write(xlsx.Sheet{Name: "Sheet1", Rows: append([][]string{header}, rows...)})
+	if err != nil {
 		t.Fatal(err)
 	}
-	return buf.Bytes()
+	return data
 }
 
 var head = []string{"username", "email", "name", "password", "group", "is_active"}
@@ -207,11 +195,14 @@ func TestTemplate_RoundTrips(t *testing.T) {
 	if _, err := ReadSheet(data); !errors.Is(err, ErrNoRows) {
 		t.Fatalf("template: %v", err)
 	}
-	f, err := excelize.OpenReader(bytes.NewReader(data))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := f.GetSheetList(); len(got) != 2 || got[0] != "Users" {
-		t.Fatalf("sheets: %v", got)
+	var first []string
+	err = xlsx.ReadFirstSheet(data, xlsx.Limits{}, func(line int, cells []string) error {
+		if line == 1 {
+			first = cells
+		}
+		return nil
+	})
+	if err != nil || strings.Join(first, ",") != "username,email,name,password,group,is_active" {
+		t.Fatalf("header row: %v %v", first, err)
 	}
 }

@@ -1,14 +1,12 @@
 package user
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/xuri/excelize/v2"
-
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/xlsx"
 )
 
 // Limits of an import file. They keep one request from using the memory or the time of the server.
@@ -59,43 +57,16 @@ type Row struct {
 // ReadSheet reads the users from the first sheet of an .xlsx file. Cells are read as text, exactly as typed
 // (a password of digits stays digits), and rows that are completely empty are skipped.
 func ReadSheet(data []byte) ([]Row, error) {
-	f, err := excelize.OpenReader(bytes.NewReader(data), excelize.Options{
-		UnzipSizeLimit: unzipLimit, UnzipXMLSizeLimit: unzipXMLLimit, RawCellValue: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrNotSpreadsheet, err)
-	}
-	defer func() { _ = f.Close() }()
-
-	sheets := f.GetSheetList()
-	if len(sheets) == 0 {
-		return nil, ErrNotSpreadsheet
-	}
-	it, err := f.Rows(sheets[0])
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrNotSpreadsheet, err)
-	}
-	defer func() { _ = it.Close() }()
-
 	var (
 		index map[string]int
 		rows  []Row
-		line  int
 	)
-	for it.Next() {
-		line++
-		if line > maxScannedLines {
-			return nil, ErrTooManyRows
-		}
-		cells, err := it.Columns(excelize.Options{RawCellValue: true})
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrNotSpreadsheet, err)
-		}
+	lim := xlsx.Limits{MaxLines: maxScannedLines, MaxColumns: 32, MaxUnzipped: unzipLimit, MaxPart: unzipXMLLimit}
+	err := xlsx.ReadFirstSheet(data, lim, func(line int, cells []string) error {
 		if index == nil {
-			if index, err = headerIndex(cells); err != nil {
-				return nil, err
-			}
-			continue
+			var err error
+			index, err = headerIndex(cells)
+			return err
 		}
 		r := Row{
 			Line: line, Username: cell(cells, index, "username"), Email: cell(cells, index, "email"),
@@ -103,12 +74,21 @@ func ReadSheet(data []byte) ([]Row, error) {
 			Group: cell(cells, index, "group"), IsActive: cell(cells, index, "is_active"),
 		}
 		if r == (Row{Line: line}) {
-			continue // blank row
+			return nil // blank row
 		}
 		if len(rows) == MaxImportRows {
-			return nil, ErrTooManyRows
+			return ErrTooManyRows
 		}
 		rows = append(rows, r)
+		return nil
+	})
+	switch {
+	case errors.Is(err, xlsx.ErrFormat):
+		return nil, fmt.Errorf("%w: %w", ErrNotSpreadsheet, err)
+	case errors.Is(err, xlsx.ErrTooManyLines):
+		return nil, ErrTooManyRows
+	case err != nil:
+		return nil, err
 	}
 	if index == nil {
 		return nil, &MissingColumnsError{Columns: requiredColumns}
@@ -154,52 +134,16 @@ func cell(cells []string, index map[string]int, column string) string {
 
 // Template returns an .xlsx file with the header row of the import sheet and a help sheet.
 func Template() ([]byte, error) {
-	f := excelize.NewFile()
-	defer func() { _ = f.Close() }()
-
-	const users, help = "Users", "Help"
-	if err := f.SetSheetName("Sheet1", users); err != nil {
-		return nil, err
-	}
 	head := append(append([]string{}, requiredColumns...), optionalColumns...)
-	bold, err := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
-	if err != nil {
-		return nil, err
-	}
-	for i, h := range head {
-		cellName, _ := excelize.CoordinatesToCellName(i+1, 1)
-		if err := f.SetCellValue(users, cellName, h); err != nil {
-			return nil, err
-		}
-		if err := f.SetCellStyle(users, cellName, cellName, bold); err != nil {
-			return nil, err
-		}
-		_ = f.SetColWidth(users, string(rune('A'+i)), string(rune('A'+i)), 22)
-	}
-
-	if _, err := f.NewSheet(help); err != nil {
-		return nil, err
-	}
-	lines := []string{
-		"Fill the Users sheet, one user per row, then upload the file. Only the first sheet is read.",
-		"username: 3 to 64 characters. email: a valid address. name: up to 100 characters.",
-		fmt.Sprintf("password: at least %d characters. It is stored as a hash and cannot be shown again.", password.MinLength),
-		"group (optional): the NAME of an existing group. Leave empty for no group.",
-		"is_active (optional): yes or no. Empty means yes.",
-		fmt.Sprintf("At most %d users per file. If one row is wrong, nothing is imported.", MaxImportRows),
-	}
-	for i, l := range lines {
-		cellName, _ := excelize.CoordinatesToCellName(1, i+1)
-		if err := f.SetCellValue(help, cellName, l); err != nil {
-			return nil, err
-		}
-	}
-	_ = f.SetColWidth(help, "A", "A", 100)
-	f.SetActiveSheet(0)
-
-	var buf bytes.Buffer
-	if err := f.Write(&buf); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return xlsx.Write(
+		xlsx.Sheet{Name: "Users", Header: true, Widths: []float64{22, 22, 22, 22, 22, 22}, Rows: [][]string{head}},
+		xlsx.Sheet{Name: "Help", Widths: []float64{100}, Rows: [][]string{
+			{"Fill the Users sheet, one user per row, then upload the file. Only the first sheet is read."},
+			{"username: 3 to 64 characters. email: a valid address. name: up to 100 characters."},
+			{fmt.Sprintf("password: at least %d characters. It is stored as a hash and cannot be shown again.", password.MinLength)},
+			{"group (optional): the NAME of an existing group. Leave empty for no group."},
+			{"is_active (optional): yes or no. Empty means yes."},
+			{fmt.Sprintf("At most %d users per file. If one row is wrong, nothing is imported.", MaxImportRows)},
+		}},
+	)
 }

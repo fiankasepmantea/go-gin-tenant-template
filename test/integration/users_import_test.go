@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xuri/excelize/v2"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/xlsx"
 )
 
 const (
@@ -21,20 +21,15 @@ const (
 // sheet builds an .xlsx file from rows of comma separated cells (no commas inside cells).
 func sheet(t *testing.T, lines ...string) []byte {
 	t.Helper()
-	f := excelize.NewFile()
-	for r, line := range lines {
-		for c, v := range strings.Split(line, ",") {
-			name, _ := excelize.CoordinatesToCellName(c+1, r+1)
-			if err := f.SetCellValue("Sheet1", name, v); err != nil {
-				t.Fatal(err)
-			}
-		}
+	rows := make([][]string, len(lines))
+	for i, l := range lines {
+		rows[i] = strings.Split(l, ",")
 	}
-	var buf bytes.Buffer
-	if err := f.Write(&buf); err != nil {
+	data, err := xlsx.Write(xlsx.Sheet{Name: "Sheet1", Rows: rows})
+	if err != nil {
 		t.Fatal(err)
 	}
-	return buf.Bytes()
+	return data
 }
 
 func (e *rbacEnv) importUsers(t *testing.T, tok, query string, content []byte) apiResp {
@@ -159,12 +154,15 @@ func TestUsersImport_TemplateAndAccess(t *testing.T) {
 		w.Header().Get("Content-Type") != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
 		t.Fatalf("template: %d %v", w.Code, w.Header())
 	}
-	f, err := excelize.OpenReader(bytes.NewReader(w.Body.Bytes()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if v, _ := f.GetCellValue("Users", "A1"); v != "username" {
-		t.Fatalf("template header: %q", v)
+	var a1 string
+	err := xlsx.ReadFirstSheet(w.Body.Bytes(), xlsx.Limits{}, func(line int, cells []string) error {
+		if line == 1 && len(cells) > 0 {
+			a1 = cells[0]
+		}
+		return nil
+	})
+	if err != nil || a1 != "username" {
+		t.Fatalf("template header: %q %v", a1, err)
 	}
 
 	// a member without a grant cannot import: it is a normal tenant endpoint
