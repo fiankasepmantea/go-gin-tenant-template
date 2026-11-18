@@ -9,6 +9,8 @@ The source of truth is here; `CLAUDE.md` and `AGENTS.md` at the root only point 
 | `skills/` | Recipes for one type of task (how to create a module, write tests, etc.) | When the task matches |
 | `plans/` | Roadmap and the plan for the current phase | When choosing what to work on next |
 
+Guides for people (operators, admins, API users, developers) live in `docs/guides/`, not here. The [Developer Handbook](../docs/guides/developer.md) is the best starting point for a new maintainer.
+
 ## How to use
 
 1. Read `rules/00-must-follow.md` and `rules/10-secrets-env.md`.
@@ -21,3 +23,4 @@ The source of truth is here; `CLAUDE.md` and `AGENTS.md` at the root only point 
 - One file per topic, short (under ~120 lines), containing real commands and examples.
 - New rules that come out of a bug or review: add them to `rules/`, not just to chat.
 - Do not put secrets, tokens, or env file contents here.
+- A change that alters behavior described in `docs/guides/` must update those guides (English and `.id.md`) in the same pull request.
