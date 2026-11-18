@@ -9,7 +9,15 @@ The source of truth is here; `CLAUDE.md` and `AGENTS.md` at the root only point 
 | `skills/` | Recipes for one type of task (how to create a module, write tests, etc.) | When the task matches |
 | `plans/` | Roadmap and the plan for the current phase | When choosing what to work on next |
 
-Guides for people (operators, admins, API users, developers) live in `docs/guides/`, not here. The [Developer Handbook](../docs/guides/developer.md) is the best starting point for a new maintainer.
+Guides for people (operators, admins, API users, developers) live in `docs/guides/`, not here. Each guide has an English source and an Indonesian `.id.md` translation:
+
+| Guide | Audience | Read it when |
+|---|---|---|
+| [Developer Handbook](../docs/guides/developer.md) | Maintainers of this code | Starting on the codebase; best first read for a new maintainer |
+| [Operator Runbook](../docs/guides/operator.md) | Whoever runs the server | Deploying, upgrading, backing up, troubleshooting |
+| [Platform Admin Guide](../docs/guides/platform-admin.md) | Platform owner | Onboarding tenants, publishing app versions, offboarding |
+| [Client Admin Guide](../docs/guides/client-admin.md) | Client's tenant admin | Managing users, groups and files through the API |
+| [API Integration Guide](../docs/guides/api-integration.md) | Client developers | Integrating an app with the API |
 
 ## How to use
 

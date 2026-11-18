@@ -22,7 +22,7 @@ Image runtime berbasis distroless, berjalan sebagai non-root, dan hanya berisi `
 
 ## 2. Prasyarat
 
-- Docker + Docker Compose (atau cluster Kubernetes), Go 1.25+ untuk menjalankan `tenantctl`.
+- Docker + Docker Compose (atau cluster Kubernetes), Go 1.26+ untuk menjalankan `tenantctl`.
 - PostgreSQL dengan role aplikasi **bukan superuser dan tanpa BYPASSRLS** (superuser/pemilik tabel melewati RLS, isolasi tenant jadi tidak berlaku).
 - Domain + sertifikat TLS di depan server (reverse proxy / load balancer). API sendiri melayani HTTP biasa.
 - Server SMTP bila reset password dipakai.
