@@ -73,7 +73,14 @@ func TestParse_Rejects(t *testing.T) {
 	})
 
 	t.Run("tampered token", func(t *testing.T) {
-		tampered := token[:len(token)-2] + "AA"
+		// Change one character in the middle of the payload to a different one. Replacing the last characters is
+		// flaky: they may already be "AA", or only carry base64 padding bits that decoding ignores.
+		i := len(token) / 2
+		repl := "A"
+		if token[i] == 'A' {
+			repl = "B"
+		}
+		tampered := token[:i] + repl + token[i+1:]
 		if _, err := m.Parse(tampered); !errors.Is(err, ErrInvalidToken) {
 			t.Errorf("err = %v", err)
 		}

@@ -186,6 +186,40 @@ func (p *Provisioner) MirrorEndpoints(ctx context.Context) (int, error) {
 	return n, errors.Join(errs...)
 }
 
+// SetTenantStatus suspends or resumes a tenant. A suspended tenant cannot log in or refresh a token, its data is
+// kept, and resuming undoes it. Suspending also revokes every refresh token of the tenant. Access tokens already
+// issued stay valid until they expire (ACCESS_TOKEN_TTL, 15 minutes in production).
+func (p *Provisioner) SetTenantStatus(ctx context.Context, tenantCode, status string) error {
+	if status != tenant.StatusActive && status != tenant.StatusSuspended {
+		return fmt.Errorf("unknown tenant status %q", status)
+	}
+	code, ok := tenantctx.NormalizeCode(tenantCode)
+	if !ok {
+		return errors.New("invalid tenant code")
+	}
+	t, err := p.tenants.FindByCode(ctx, code)
+	if errors.Is(err, core.ErrNotFound) {
+		return fmt.Errorf("tenant %q does not exist", code)
+	}
+	if err != nil {
+		return err
+	}
+	if err := database.From(ctx, p.db).Model(&tenant.Tenant{}).Where("tenant_id = ?", t.ID).Update("status", status).Error; err != nil {
+		return err
+	}
+	// The data side: the copy of the tenant row in a dedicated database (the same row when shared) and the sessions.
+	return p.tx(tenantctx.WithID(ctx, t.ID), auth.LevelTenant, func(ctx context.Context) error {
+		db := database.From(ctx, p.db)
+		if err := db.Model(&tenant.Tenant{}).Where("tenant_id = ?", t.ID).Update("status", status).Error; err != nil {
+			return err
+		}
+		if status == tenant.StatusSuspended {
+			return db.Exec("UPDATE user_tokens SET revoked_at = now() WHERE revoked_at IS NULL").Error
+		}
+		return nil
+	})
+}
+
 // CreateTenantUser creates an active user inside the tenant with the given code.
 func (p *Provisioner) CreateTenantUser(ctx context.Context, tenantCode, username, email, name, plainPassword string) (*user.User, error) {
 	u, err := p.newUser(username, email, name, plainPassword)

@@ -9,10 +9,12 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
 	"gorm.io/gorm"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/app"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/config"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
 )
@@ -111,6 +113,33 @@ func newTenantCmd() *cobra.Command {
 	_ = create.MarkFlagRequired("name")
 
 	cmd.AddCommand(create)
+	for _, a := range []struct{ use, short, status, done string }{
+		{"suspend", "Suspend a tenant: nobody can log in or refresh, the data is kept", tenant.StatusSuspended, "suspended"},
+		{"resume", "Resume a suspended tenant", tenant.StatusActive, "resumed"},
+	} {
+		a := a
+		var code string
+		c := &cobra.Command{
+			Use:   a.use,
+			Short: a.short,
+			Args:  cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				p, closeFn, err := openProvisioner()
+				if err != nil {
+					return err
+				}
+				defer closeFn()
+				if err := p.SetTenantStatus(context.Background(), code, a.status); err != nil {
+					return err
+				}
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "tenant %s: %s\n", code, a.done)
+				return nil
+			},
+		}
+		c.Flags().StringVar(&code, "code", "", "tenant code (required)")
+		_ = c.MarkFlagRequired("code")
+		cmd.AddCommand(c)
+	}
 	return cmd
 }
 

@@ -440,3 +440,51 @@ func TestAuth_HTTPFlow(t *testing.T) {
 		t.Errorf("platform /me level = %v", got)
 	}
 }
+
+func TestProvision_SuspendAndResumeTenant(t *testing.T) {
+	a := setupAuth(t)
+	a.seed(t)
+	ctx := context.Background()
+	inA := session.LoginInput{TenantCode: "tokoa", Username: "alice", Password: "password-of-alice-a"}
+	inB := session.LoginInput{TenantCode: "tokob", Username: "alice", Password: "password-of-alice-b"}
+
+	tok, err := a.svc.Login(ctx, inA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.svc.Login(ctx, inB); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.prov.SetTenantStatus(ctx, "tokoa", "suspended"); err != nil {
+		t.Fatalf("suspend: %v", err)
+	}
+	if _, err := a.svc.Login(ctx, inA); !errors.Is(err, session.ErrInvalidCredentials) {
+		t.Errorf("login of a suspended tenant: %v", err)
+	}
+	if _, err := a.svc.Refresh(ctx, tok.RefreshToken, "it", "127.0.0.1"); err == nil {
+		t.Error("a refresh token of a suspended tenant must not work")
+	}
+	if n := a.count(t, "SELECT count(*) FROM user_tokens WHERE revoked_at IS NULL AND tenant_id = (SELECT tenant_id FROM tenants WHERE code = 'tokoa')"); n != 0 {
+		t.Errorf("active sessions of the suspended tenant = %d, want 0", n)
+	}
+	if _, err := a.svc.Login(ctx, inB); err != nil {
+		t.Errorf("another tenant must be unaffected: %v", err)
+	}
+	if n := a.count(t, "SELECT count(*) FROM users WHERE username = 'alice' AND tenant_id = (SELECT tenant_id FROM tenants WHERE code = 'tokoa')"); n != 1 {
+		t.Errorf("data must be kept, users = %d", n)
+	}
+
+	if err := a.prov.SetTenantStatus(ctx, "tokoa", "active"); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if _, err := a.svc.Login(ctx, inA); err != nil {
+		t.Errorf("login after resume: %v", err)
+	}
+	if err := a.prov.SetTenantStatus(ctx, "ghost", "suspended"); err == nil {
+		t.Error("a missing tenant must fail")
+	}
+	if err := a.prov.SetTenantStatus(ctx, "tokoa", "deleted"); err == nil {
+		t.Error("an unknown status must fail")
+	}
+}
