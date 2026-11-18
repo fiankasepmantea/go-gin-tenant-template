@@ -3,12 +3,15 @@
 package integration
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -22,7 +25,9 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/user"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/auth"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/idgen"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/storage"
 	tenantctx "github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/transport/rest/middleware"
@@ -486,5 +491,130 @@ func TestProvision_SuspendAndResumeTenant(t *testing.T) {
 	}
 	if err := a.prov.SetTenantStatus(ctx, "tokoa", "deleted"); err == nil {
 		t.Error("an unknown status must fail")
+	}
+}
+
+func TestProvision_ExportAndDeleteTenant(t *testing.T) {
+	a := setupAuth(t)
+	a.seed(t)
+	ctx := context.Background()
+	store, err := storage.NewLocal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+
+	tenantID := func(code string) (id string) {
+		if err := a.owner.Raw("SELECT tenant_id::text FROM tenants WHERE code = ?", code).Scan(&id).Error; err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	addFile := func(code, content string) string {
+		fid, tid := idgen.New(), tenantID(code)
+		key := tid + "/" + fid
+		if _, err := store.Put(ctx, key, strings.NewReader(content), 1<<20); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.owner.Exec(`INSERT INTO files (file_id, tenant_id, name, content_type, size, purpose, storage_key)
+			VALUES (?, ?, 'doc.pdf', 'application/pdf', ?, 'doc', ?)`, fid, tid, len(content), key).Error; err != nil {
+			t.Fatal(err)
+		}
+		return fid
+	}
+	fileA, fileB := addFile("tokoa", "content of A"), addFile("tokob", "content of B")
+	if _, err := a.svc.Login(ctx, session.LoginInput{TenantCode: "tokoa", Username: "alice", Password: "password-of-alice-a"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// export: works on an active tenant, never overwrites, never contains secrets or other tenants
+	out := filepath.Join(t.TempDir(), "tokoa.zip")
+	man, err := a.prov.ExportTenant(ctx, "tokoa", out, store)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	if man.Files != 1 || man.Tables["users"] != 1 {
+		t.Errorf("manifest = %+v", man)
+	}
+	if _, ok := man.Tables["user_tokens"]; ok {
+		t.Error("user_tokens must not be exported")
+	}
+	if _, err := a.prov.ExportTenant(ctx, "tokoa", out, store); err == nil {
+		t.Error("an existing archive must not be overwritten")
+	}
+	zr, err := zip.OpenReader(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = zr.Close() }()
+	got := map[string]string{}
+	for _, f := range zr.File {
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(rc)
+		_ = rc.Close()
+		got[f.Name] = string(b)
+	}
+	if got["files/"+fileA] != "content of A" {
+		t.Errorf("exported file = %q", got["files/"+fileA])
+	}
+	if _, ok := got["files/"+fileB]; ok {
+		t.Error("a file of another tenant was exported")
+	}
+	users := got["data/users.jsonl"]
+	if !strings.Contains(users, "alice@a.test") || strings.Contains(users, "alice@b.test") {
+		t.Errorf("users.jsonl = %s", users)
+	}
+	for name, body := range got {
+		if strings.Contains(body, "password_hash") || strings.Contains(body, "argon2") || strings.Contains(body, "storage_key") {
+			t.Errorf("%s leaks a secret", name)
+		}
+	}
+	if got["manifest.json"] == "" {
+		t.Error("no manifest")
+	}
+
+	// delete: needs the confirmation and a suspended tenant
+	if _, err := a.prov.DeleteTenant(ctx, "tokoa", "wrong", store); err == nil {
+		t.Error("a wrong confirmation must fail")
+	}
+	if _, err := a.prov.DeleteTenant(ctx, "tokoa", "tokoa", store); err == nil {
+		t.Error("an active tenant must not be deleted")
+	}
+	if err := a.prov.SetTenantStatus(ctx, "tokoa", "suspended"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := a.prov.DeleteTenant(ctx, "tokoa", "tokoa", store)
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if res.Files != 1 || len(res.FileErrors) != 0 || res.Rows["users"] != 1 {
+		t.Errorf("result = %+v", res)
+	}
+	for _, q := range []string{
+		"SELECT count(*) FROM tenants WHERE code = 'tokoa'",
+		"SELECT count(*) FROM users WHERE email = 'alice@a.test'",
+		"SELECT count(*) FROM files WHERE file_id = '" + fileA + "'",
+		"SELECT count(*) FROM user_tokens WHERE user_id IN (SELECT user_id FROM users WHERE email = 'alice@a.test')",
+	} {
+		if n := a.count(t, q); n != 0 {
+			t.Errorf("%s = %d, want 0", q, n)
+		}
+	}
+	if _, err := store.Open(ctx, "x/"+fileA); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("content must be gone: %v", err)
+	}
+
+	// the other tenant is untouched, and the code can be used again
+	if _, err := a.svc.Login(ctx, session.LoginInput{TenantCode: "tokob", Username: "alice", Password: "password-of-alice-b"}); err != nil {
+		t.Errorf("another tenant must still work: %v", err)
+	}
+	if n := a.count(t, "SELECT count(*) FROM files WHERE file_id = '"+fileB+"'"); n != 1 {
+		t.Errorf("files of another tenant = %d, want 1", n)
+	}
+	if _, err := a.prov.CreateTenant(ctx, "tokoa", "Toko A again"); err != nil {
+		t.Errorf("the code must be reusable: %v", err)
 	}
 }

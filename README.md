@@ -18,7 +18,14 @@ Analogy: one application = one apartment building, each tenant = one resident (a
 | 5f | gRPC `AuthService` (`Validate`, `Authorize`, TLS/mTLS, same RBAC decision as REST) ([docs](docs/grpc.md)) | **Done** (unit + integration tests) |
 | 5g | Database per tenant (hybrid): dedicated database for chosen tenants, `tenantctl migrate` ([docs](docs/database-per-tenant.md)) | **Done** (unit + two-database integration tests) |
 | 5h | Observability (request log with user/tenant, Prometheus `/metrics`, `/readyz` with dedicated databases) ([docs](docs/observability.md)) and OpenAPI/Swagger generated from the code ([docs](docs/openapi.md)) | **Done** (unit + integration tests) |
+| A | Users API (`/users`: create, change, deactivate, set password) ([docs](docs/users-api.md)) | **Done** (unit + integration tests) |
+| B | Files: upload and download with swappable storage, and attachments to records of other modules ([files](docs/files.md), [attachments](docs/attachments.md)) | **Done** (unit + integration tests) |
+| C | App versions: update check for mobile apps, APK upload and public download ([docs](docs/app-versions.md)) | **Done** (unit + integration tests) |
+| E | Import users from an Excel file ([docs](docs/users-import.md)) | **Done** (unit + integration tests) |
+| F | Offboarding a client: suspend/resume, export, permanent delete ([docs](docs/offboarding.md)) | **Done** (unit + integration tests) |
 | 6 | Optional: Asynq, Kafka/RabbitMQ, OpenTelemetry tracing, advanced Kubernetes; template 2 (microservice) | Not started (only when a project needs it) |
+
+New here? Read the step-by-step guide: [docs/getting-started.md](docs/getting-started.md) (Bahasa Indonesia: [docs/getting-started.id.md](docs/getting-started.id.md)).
 
 ## Prerequisites
 

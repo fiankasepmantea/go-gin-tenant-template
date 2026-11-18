@@ -17,6 +17,7 @@ import (
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/modules/tenant"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/database"
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/password"
+	"github.com/fiankasepmantea/go-gin-tenant-template/internal/platform/storage"
 )
 
 // openProvisioner connects to the database from the active .env file. Tests replace it.
@@ -140,7 +141,101 @@ func newTenantCmd() *cobra.Command {
 		_ = c.MarkFlagRequired("code")
 		cmd.AddCommand(c)
 	}
+
+	var exCode, exOut string
+	export := &cobra.Command{
+		Use:   "export",
+		Short: "Export all data and files of a tenant to a zip archive",
+		Long: "Writes data/<table>.jsonl for every table of the tenant, files/<file_id> for the uploaded files and\n" +
+			"manifest.json. Password and token hashes are left out. The archive is created with mode 0600 and an\n" +
+			"existing file is never overwritten. Hand it to the client over a secure channel.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			p, closeFn, err := openProvisioner()
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			store, closeStore, err := openStorage()
+			if err != nil {
+				return err
+			}
+			defer closeStore()
+			m, err := p.ExportTenant(context.Background(), exCode, exOut, store)
+			if err != nil {
+				return err
+			}
+			rows := 0
+			for _, n := range m.Tables {
+				rows += n
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "exported %d rows from %d tables and %d files to %s\n", rows, len(m.Tables), m.Files, exOut)
+			if len(m.MissingFiles) > 0 {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %d files are listed in the database but missing from storage (see manifest.json)\n", len(m.MissingFiles))
+			}
+			return nil
+		},
+	}
+	export.Flags().StringVar(&exCode, "code", "", "tenant code (required)")
+	export.Flags().StringVar(&exOut, "out", "", "path of the zip archive to create (required)")
+	_ = export.MarkFlagRequired("code")
+	_ = export.MarkFlagRequired("out")
+	cmd.AddCommand(export)
+
+	var delCode, delConfirm string
+	del := &cobra.Command{
+		Use:   "delete",
+		Short: "Permanently delete a suspended tenant with all its data and files",
+		Long: "Cannot be undone. The tenant must be suspended first, and --confirm must repeat the tenant code.\n" +
+			"Export the data first (tenantctl tenant export). A dedicated database is not dropped: do that yourself.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			p, closeFn, err := openProvisioner()
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			store, closeStore, err := openStorage()
+			if err != nil {
+				return err
+			}
+			defer closeStore()
+			res, err := p.DeleteTenant(context.Background(), delCode, delConfirm, store)
+			if res != nil {
+				var rows int64
+				for _, n := range res.Rows {
+					rows += n
+				}
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "deleted %d rows from %d tables and %d files\n", rows, len(res.Rows), res.Files)
+				if res.DedicatedRef != "" {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "the dedicated database %s is untouched: drop it and remove TENANT_DB_URL_%s yourself\n", res.DedicatedRef, strings.ToUpper(res.DedicatedRef))
+				}
+				for _, fe := range res.FileErrors {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: file not deleted: %v\n", fe)
+				}
+			}
+			return err
+		},
+	}
+	del.Flags().StringVar(&delCode, "code", "", "tenant code (required)")
+	del.Flags().StringVar(&delConfirm, "confirm", "", "repeat the tenant code to confirm (required)")
+	_ = del.MarkFlagRequired("code")
+	_ = del.MarkFlagRequired("confirm")
+	cmd.AddCommand(del)
 	return cmd
+}
+
+// openStorage opens the file storage from the active .env file. Tests replace it.
+var openStorage = func() (storage.Store, func(), error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, nil, err
+	}
+	l, err := storage.NewLocal(cfg.Storage.LocalDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	return l, func() { _ = l.Close() }, nil
 }
 
 func newUserCmd() *cobra.Command {
