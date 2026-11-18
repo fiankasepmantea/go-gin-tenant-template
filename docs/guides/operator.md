@@ -22,7 +22,7 @@ The runtime image is distroless, runs as non-root, and contains only `/server` a
 
 ## 2. Prerequisites
 
-- Docker + Docker Compose (or a Kubernetes cluster), Go 1.25+ to run `tenantctl`.
+- Docker + Docker Compose (or a Kubernetes cluster), Go 1.26+ to run `tenantctl`.
 - PostgreSQL with an application role that is **not a superuser and has no BYPASSRLS** (superusers and table owners bypass RLS, which breaks tenant isolation).
 - A domain + TLS certificate in front of the server (reverse proxy / load balancer). The API itself speaks plain HTTP.
 - An SMTP server if password reset is used.

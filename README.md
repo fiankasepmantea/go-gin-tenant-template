@@ -25,6 +25,8 @@ Analogy: one application = one apartment building, each tenant = one resident (a
 | F | Offboarding a client: suspend/resume, export, permanent delete ([docs](docs/offboarding.md)) | **Done** (unit + integration tests) |
 | 6 | Optional: Asynq, Kafka/RabbitMQ, OpenTelemetry tracing, advanced Kubernetes; template 2 (microservice) | Not started (only when a project needs it) |
 
+Guides by audience ([docs/guides](docs/guides), each also in Bahasa Indonesia as `.id.md`): [Operator Runbook](docs/guides/operator.md) · [Platform Admin](docs/guides/platform-admin.md) · [Client Admin](docs/guides/client-admin.md) · [API Integration](docs/guides/api-integration.md) · [Developer Handbook](docs/guides/developer.md).
+
 New here? Read the step-by-step guide: [docs/getting-started.md](docs/getting-started.md) (Bahasa Indonesia: [docs/getting-started.id.md](docs/getting-started.id.md)).
 
 ## Prerequisites
