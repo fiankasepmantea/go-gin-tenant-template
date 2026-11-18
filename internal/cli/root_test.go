@@ -75,6 +75,8 @@ func TestProvisionCommandsRequireFlags(t *testing.T) {
 		{"admin", "create", "--username", "u", "--email", "a@b.c", "--name", "N"},                    // no --password-stdin
 		{"tenant", "suspend"},
 		{"tenant", "resume"},
+		{"tenant", "export", "--code", "acme"},
+		{"tenant", "delete", "--code", "acme"},
 		{"group", "create"},
 		{"group", "create", "--tenant", "acme"},
 		{"group", "grant", "--tenant", "acme"},
