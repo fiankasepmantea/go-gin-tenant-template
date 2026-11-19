@@ -17,7 +17,7 @@ Anda hanya melihat dan mengubah data **tenant Anda sendiri**. Data klien lain ti
 
 ## 2. Menyiapkan Postman
 
-1. Impor collection `GO-GIN-TENANT-TEMPLATE.postman_collection.json` dan environment `GO-GIN-TENANT-TEMPALTE-ENV.postman_environment.json`, lalu pilih environment tersebut (pojok kanan atas).
+1. Impor collection `GO-GIN-TENANT-TEMPLATE.postman_collection.json` dan environment `GO-GIN-TENANT-TEMPALTE-ENV.postman_environment.json`, (minta kedua file itu ke penyedia layanan), lalu pilih environment tersebut (pojok kanan atas).
 2. Isi variabel environment:
 
 | Variabel | Isi |

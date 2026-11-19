@@ -27,7 +27,7 @@ Panduan ini untuk **developer/maintainer** yang menerima kode ini: apa fungsi ti
 | `api/openapi`, `api/proto` | Spesifikasi API dan definisi protobuf |
 | `deployments/` | `docker/` (compose dev, Dockerfile) dan `k8s/` (base + overlay dev/prod) |
 | `test/integration/` | Tes ke PostgreSQL dan Redis sungguhan (isolasi tenant, RBAC, auth, file, import, dll.) |
-| `docs/` | Dokumentasi per topik + `docs/adr/` (keputusan arsitektur) + `docs/postman/` |
+| `docs/` | Dokumentasi per topik + `docs/adr/` (keputusan arsitektur) |
 | `.ai/`, `CLAUDE.md`, `AGENTS.md` | Aturan dan skill untuk asisten AI dan kontributor |
 | `scripts/` | `init-env.sh` (buat `.env.<mode>` + `PASETO_KEY` baru) dan git hook yang memblokir file env/kunci |
 | `Makefile` | Semua perintah harian (`make help`) |
@@ -115,13 +115,13 @@ Nama modul: tunggal, huruf kecil dan angka (`product`, `invoice`); nama yang ben
 | `make build`, `docker-build` | Binary ke `./bin`, image aplikasi |
 | `make proto` | Generate kode gRPC (butuh buf dan plugin) |
 
-CLI `tenantctl` (`go run ./cmd/cli ...`): `tenant create`, `user create\|set-group`, `admin create`, `group create\|grant`, `endpoint sync [--prune]`, `migrate up\|status\|baseline`, `make:module`, `make:migration`, `keygen`.
+CLI `tenantctl` (`go run ./cmd/cli ...`): `tenant create\|suspend\|resume\|export\|delete`, `user create\|set-group`, `admin create`, `group create\|grant`, `endpoint sync [--prune]`, `migrate up\|status\|baseline`, `make:module`, `make:migration`, `keygen`.
 
 ## 7. Pengujian
 
 - **Unit** (`make test`): tanpa database, tabel kasus; setiap perilaku baru wajib ada tesnya.
 - **Integrasi** (`make test-integration`): PostgreSQL dan Redis sungguhan (`DB_*` dan `REDIS_PORT` dari `.env.<mode>`, atau `TEST_DATABASE_URL` / `TEST_REDIS_ADDR`). Mencakup isolasi tenant (tenant B tidak bisa melihat/mengubah data A), default-deny, auth, file, import, dan kecocokan REST dengan gRPC.
-- **Collection Postman** (`docs/postman` dan berkas collection terbaru) dipakai untuk uji manual end-to-end.
+- **Collection Postman** (berkas `.postman_collection.json` dan environment yang disimpan maintainer; tidak ada di repositori ini) dipakai untuk uji manual end-to-end.
 - Sebelum PR: `make fmt vet lint test`; CI menjalankan lint, tes, govulncheck, dan gitleaks.
 
 ## 8. Konvensi wajib

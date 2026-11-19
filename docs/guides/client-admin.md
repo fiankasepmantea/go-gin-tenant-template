@@ -17,7 +17,7 @@ You only see and change **your own tenant's** data. Other clients' data is never
 
 ## 2. Setting up Postman
 
-1. Import the collection `GO-GIN-TENANT-TEMPLATE.postman_collection.json` and the environment `GO-GIN-TENANT-TEMPALTE-ENV.postman_environment.json`, then select that environment (top right).
+1. Import the collection `GO-GIN-TENANT-TEMPLATE.postman_collection.json` and the environment `GO-GIN-TENANT-TEMPALTE-ENV.postman_environment.json`, (ask the service provider for both files), then select that environment (top right).
 2. Fill the environment variables:
 
 | Variable | Value |
