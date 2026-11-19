@@ -27,7 +27,7 @@ This guide is for the **developer/maintainer** who receives this code: what each
 | `api/openapi`, `api/proto` | API specification and protobuf definitions |
 | `deployments/` | `docker/` (dev compose, Dockerfile) and `k8s/` (base + dev/prod overlays) |
 | `test/integration/` | Tests against real PostgreSQL and Redis (tenant isolation, RBAC, auth, files, import, ...) |
-| `docs/` | Per-topic documentation + `docs/adr/` (architecture decisions) + `docs/postman/` |
+| `docs/` | Per-topic documentation + `docs/adr/` (architecture decisions) |
 | `.ai/`, `CLAUDE.md`, `AGENTS.md` | Rules and skills for AI assistants and contributors |
 | `scripts/` | `init-env.sh` (creates `.env.<mode>` + a fresh `PASETO_KEY`) and git hooks that block env/key files |
 | `Makefile` | All daily commands (`make help`) |
@@ -115,13 +115,13 @@ Module names: singular, lower-case letters and digits (`product`, `invoice`); na
 | `make build`, `docker-build` | Binaries into `./bin`, the application image |
 | `make proto` | Generate gRPC code (needs buf and plugins) |
 
-The `tenantctl` CLI (`go run ./cmd/cli ...`): `tenant create`, `user create\|set-group`, `admin create`, `group create\|grant`, `endpoint sync [--prune]`, `migrate up\|status\|baseline`, `make:module`, `make:migration`, `keygen`.
+The `tenantctl` CLI (`go run ./cmd/cli ...`): `tenant create\|suspend\|resume\|export\|delete`, `user create\|set-group`, `admin create`, `group create\|grant`, `endpoint sync [--prune]`, `migrate up\|status\|baseline`, `make:module`, `make:migration`, `keygen`.
 
 ## 7. Testing
 
 - **Unit** (`make test`): no database, table-driven; every new behavior needs a test.
 - **Integration** (`make test-integration`): real PostgreSQL and Redis (`DB_*` and `REDIS_PORT` from `.env.<mode>`, or `TEST_DATABASE_URL` / `TEST_REDIS_ADDR`). Covers tenant isolation (tenant B cannot see or change A's data), default deny, auth, files, import, and REST/gRPC agreement.
-- **Postman collection** (`docs/postman` and the latest collection file) is for manual end-to-end checks.
+- **Postman collection** (the `.postman_collection.json` and environment files kept by the maintainer; they are not stored in this repository) is for manual end-to-end checks.
 - Before a PR: `make fmt vet lint test`; CI runs lint, tests, govulncheck and gitleaks.
 
 ## 8. Mandatory conventions
