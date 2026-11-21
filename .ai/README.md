@@ -18,6 +18,7 @@ Guides for people (operators, admins, API users, developers) live in `docs/guide
 | [Platform Admin Guide](../docs/guides/platform-admin.md) | Platform owner | Onboarding tenants, publishing app versions, offboarding |
 | [Client Admin Guide](../docs/guides/client-admin.md) | Client's tenant admin | Managing users, groups and files through the API |
 | [API Integration Guide](../docs/guides/api-integration.md) | Client developers | Integrating an app with the API |
+| [Database and CLI Guide](../docs/guides/database.md) | Maintainers and operators | Learning what each table is for, the CLI workflow, which routes need a login, and how tenants share or split databases |
 
 ## How to use
 
