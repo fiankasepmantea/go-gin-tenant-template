@@ -206,6 +206,8 @@ func TestServiceSettings_Invalid(t *testing.T) {
 		{"reset ttl too short", map[string]string{"PASSWORD_RESET_TTL": "1m"}, "PASSWORD_RESET_TTL"},
 		{"reset ttl too long", map[string]string{"PASSWORD_RESET_TTL": "72h"}, "PASSWORD_RESET_TTL"},
 		{"reset url not http", map[string]string{"PASSWORD_RESET_URL": "javascript:alert(1)"}, "PASSWORD_RESET_URL"},
+		{"proxy not an ip", map[string]string{"TRUSTED_PROXIES": "10.0.0.0/8,proxy.local"}, "TRUSTED_PROXIES"},
+		{"proxy trusts everyone", map[string]string{"TRUSTED_PROXIES": "0.0.0.0/0"}, "TRUSTED_PROXIES"},
 		{"smtp without from", map[string]string{"SMTP_HOST": "smtp.example.com"}, "SMTP_FROM"},
 		{"smtp bad security", map[string]string{"SMTP_HOST": "h", "SMTP_FROM": "a@b.test", "SMTP_SECURITY": "ssl"}, "SMTP_SECURITY"},
 		{"smtp bad port", map[string]string{"SMTP_HOST": "h", "SMTP_FROM": "a@b.test", "SMTP_PORT": "70000"}, "SMTP_PORT"},
@@ -381,5 +383,18 @@ func TestDocsConfig(t *testing.T) {
 	t.Setenv("DOCS_ENABLED", "true")
 	if cfg, err := fromEnv(); err != nil || !cfg.Docs.Enabled {
 		t.Fatalf("production: can be switched on: %+v %v", cfg.Docs, err)
+	}
+}
+
+func TestTrustedProxies(t *testing.T) {
+	setValidEnv(t)
+	cfg, err := fromEnv()
+	if err != nil || len(cfg.Proxy.Trusted) != 0 {
+		t.Fatalf("default must trust nobody: %v %v", err, cfg.Proxy.Trusted)
+	}
+	t.Setenv("TRUSTED_PROXIES", " 10.0.0.0/8 , 192.168.1.5,, fd00::/8 ")
+	cfg, err = fromEnv()
+	if err != nil || strings.Join(cfg.Proxy.Trusted, "|") != "10.0.0.0/8|192.168.1.5|fd00::/8" {
+		t.Fatalf("list: %v %v", err, cfg.Proxy.Trusted)
 	}
 }

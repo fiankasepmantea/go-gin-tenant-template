@@ -120,6 +120,7 @@ func TestFail(t *testing.T) {
 		{"not found", core.ErrNotFound, 404, CodeNotFound, ""},
 		{"wrapped not found", fmt.Errorf("groups: get: %w", core.ErrNotFound), 404, CodeNotFound, "groups"},
 		{"conflict", core.ErrConflict, 409, CodeConflict, ""},
+		{"in use", core.ErrInUse, 409, CodeConflict, ""},
 		{"reference", core.ErrReference, 422, CodeValidationFailed, ""},
 		{"no tenant", core.ErrNoTenant, 403, CodeForbidden, ""},
 		{"no fields", core.ErrNoFields, 400, CodeInvalidRequest, ""},

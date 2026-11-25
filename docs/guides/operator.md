@@ -40,6 +40,7 @@ Template: `.env.production.example` (contains no secret values). On servers/Kube
 | `ACCESS_TOKEN_TTL` / `REFRESH_TOKEN_TTL` | Production defaults `15m` / `720h` |
 | `REDIS_ADDR`, `REDIS_PASSWORD` | Required with more than one replica |
 | `RATE_LIMIT_ATTEMPTS` / `RATE_LIMIT_WINDOW` | `5` attempts per `15m` |
+| `TRUSTED_PROXIES` | Empty: nobody is trusted, the client address is the connection address. List the IPs/CIDRs of your reverse proxy / load balancer / web console (comma separated); only they may set `X-Forwarded-For`. Needed for the rate limit to see real clients behind a proxy. `0.0.0.0/0` is refused |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_SECURITY` | `starttls` or `tls`; `none` is rejected |
 | `PASSWORD_RESET_URL`, `PASSWORD_RESET_TTL` | URL must be `https`, placeholders `{token}` and `{tenant}`; TTL defaults to `30m` |
 | `TENANT_HEADER`, `TENANT_BASE_DOMAIN` | Default `X-Tenant-Code`; e.g. `app.example.com` so `tokoa.app.example.com` is recognized as tenant `tokoa` |

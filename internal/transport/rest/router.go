@@ -48,6 +48,11 @@ func NewRouterWith(o Options, modules ...Module) *gin.Engine {
 	}
 
 	r := gin.New()
+	// Gin trusts every proxy by default, so any client could send X-Forwarded-For and choose its own address.
+	// Trust only the configured proxies (none by default); the config check has already validated the list.
+	if err := r.SetTrustedProxies(append([]string{}, cfg.Proxy.Trusted...)); err != nil {
+		log.Error("trusted proxies", "error", err)
+	}
 	r.HandleMethodNotAllowed = true
 	if o.Metrics != nil {
 		r.Use(observability.Middleware(o.Metrics)) // first: it also counts what the other middleware refuses

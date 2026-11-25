@@ -138,3 +138,30 @@ func TestDocsRoutesOnlyWhenEnabled(t *testing.T) {
 		t.Fatalf("disabled: %d", w.Code)
 	}
 }
+
+func TestClientIP_TrustedProxies(t *testing.T) {
+	tests := []struct {
+		name    string
+		trusted []string
+		want    string
+	}{
+		{"nobody trusted: the header is ignored", nil, "192.0.2.1"},
+		{"another proxy trusted: the header is ignored", []string{"10.0.0.0/8"}, "192.0.2.1"},
+		{"the peer is trusted: the header is used", []string{"192.0.2.0/24"}, "203.0.113.9"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{Env: "testing", Proxy: config.Proxy{Trusted: tc.trusted}}
+			r := NewRouter(cfg, slog.New(slog.DiscardHandler), nil)
+			var got string
+			r.NoRoute(func(c *gin.Context) { got = c.ClientIP() })
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
+			req.RemoteAddr = "192.0.2.1:5555"
+			req.Header.Set("X-Forwarded-For", "203.0.113.9")
+			r.ServeHTTP(httptest.NewRecorder(), req)
+			if got != tc.want {
+				t.Fatalf("ClientIP = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

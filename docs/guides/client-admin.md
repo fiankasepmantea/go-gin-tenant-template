@@ -114,7 +114,7 @@ Notes:
 - `PUT` **replaces the whole list**. Send the complete list you want; `[]` revokes everything.
 - An unknown id gives 422 and nothing changes.
 - Changes take effect within seconds (caches of up to 30 seconds in some cases).
-- Deleting a group does not delete its users, but they lose all permissions.
+- A group that still has users cannot be deleted (409 `conflict`). Move or delete its users first.
 - Be careful with your own group: do not revoke the permission to manage permissions from the group you use.
 - New features from later releases are not granted to groups automatically; the service provider will tell you, or you grant them with the `PUT` above.
 

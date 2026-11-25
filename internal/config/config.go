@@ -29,6 +29,7 @@ type Config struct {
 	Tenant   Tenant
 	Redis    Redis
 	Limits   RateLimit
+	Proxy    Proxy
 	SMTP     SMTP
 	Password Password
 	GRPC     GRPC
@@ -128,6 +129,13 @@ type Redis struct {
 	Addr     string // host:port
 	Password string
 	DB       int
+}
+
+// Proxy says which direct peers may tell the API the address of the real client (X-Forwarded-For, X-Real-IP).
+// Empty = nobody: the client address is the address of the connection. That is right when clients connect to the
+// API directly, and when a proxy is in front but not listed, every client looks like the proxy.
+type Proxy struct {
+	Trusted []string // TRUSTED_PROXIES: comma separated IPs or CIDRs, e.g. 10.0.0.0/8,172.16.0.0/12
 }
 
 // RateLimit holds the limits of failed login attempts, see session.Limits.
@@ -273,6 +281,7 @@ func fromEnv() (*Config, error) {
 			Attempts: l.int("RATE_LIMIT_ATTEMPTS", 5),
 			Window:   l.dur("RATE_LIMIT_WINDOW", 15*time.Minute),
 		},
+		Proxy: Proxy{Trusted: l.list("TRUSTED_PROXIES")},
 		SMTP: SMTP{
 			Host:     l.str("SMTP_HOST", ""),
 			Port:     l.int("SMTP_PORT", 587),
@@ -394,6 +403,15 @@ func (c *Config) validateServices() []error {
 	if c.Limits.Window < time.Second {
 		errs = append(errs, errors.New("RATE_LIMIT_WINDOW must be at least 1s"))
 	}
+	for _, p := range c.Proxy.Trusted {
+		_, _, cidrErr := net.ParseCIDR(p)
+		if cidrErr != nil && net.ParseIP(p) == nil {
+			errs = append(errs, fmt.Errorf("TRUSTED_PROXIES: %q is not an IP address or a CIDR", p))
+		}
+		if p == "0.0.0.0/0" || p == "::/0" {
+			errs = append(errs, errors.New("TRUSTED_PROXIES must not trust every address (clients could choose their own IP and skip the rate limit)"))
+		}
+	}
 	if c.Password.ResetTTL < 5*time.Minute || c.Password.ResetTTL > 24*time.Hour {
 		errs = append(errs, errors.New("PASSWORD_RESET_TTL must be between 5m and 24h"))
 	}
@@ -465,6 +483,17 @@ func (l *loader) str(key, def string) string {
 		return strings.TrimSpace(v)
 	}
 	return def
+}
+
+// list reads a comma separated value; blank items are dropped.
+func (l *loader) list(key string) []string {
+	var out []string
+	for _, p := range strings.Split(l.str(key, ""), ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (l *loader) int(key string, def int) int {

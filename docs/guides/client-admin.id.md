@@ -114,7 +114,7 @@ Catatan:
 - `PUT` **mengganti seluruh daftar**. Kirim daftar lengkap yang diinginkan; `[]` mencabut semua izin.
 - Id yang tidak dikenal membuat respons 422 dan tidak ada yang berubah.
 - Perubahan berlaku dalam hitungan detik (cache sampai 30 detik pada beberapa kasus).
-- Menghapus grup tidak menghapus pengguna, tetapi mereka kehilangan semua izin.
+- Grup yang masih punya pengguna tidak bisa dihapus (409 `conflict`). Pindahkan atau hapus penggunanya dulu.
 - Hati-hati dengan grup Anda sendiri: jangan mencabut izin untuk mengelola izin dari grup yang Anda pakai.
 - Fitur baru dari rilis berikutnya tidak otomatis diberikan ke grup; penyedia layanan akan memberi tahu atau Anda memberinya lewat `PUT` di atas.
 
