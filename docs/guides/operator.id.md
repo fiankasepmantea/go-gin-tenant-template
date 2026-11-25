@@ -40,6 +40,7 @@ Template: `.env.production.example` (tanpa nilai rahasia). Di server/Kubernetes 
 | `ACCESS_TOKEN_TTL` / `REFRESH_TOKEN_TTL` | Default production `15m` / `720h` |
 | `REDIS_ADDR`, `REDIS_PASSWORD` | Wajib bila replika lebih dari satu |
 | `RATE_LIMIT_ATTEMPTS` / `RATE_LIMIT_WINDOW` | `5` percobaan per `15m` |
+| `TRUSTED_PROXIES` | Kosong: tidak ada yang dipercaya, alamat klien adalah alamat koneksi. Isi IP/CIDR reverse proxy / load balancer / web console (pisah koma); hanya merekalah yang boleh mengisi `X-Forwarded-For`. Perlu agar rate limit melihat klien asli di belakang proxy. `0.0.0.0/0` ditolak |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_SECURITY` | `starttls` atau `tls`; `none` ditolak |
 | `PASSWORD_RESET_URL`, `PASSWORD_RESET_TTL` | URL harus `https`, placeholder `{token}` dan `{tenant}`; TTL default `30m` |
 | `TENANT_HEADER`, `TENANT_BASE_DOMAIN` | Default `X-Tenant-Code`; mis. `app.example.com` agar `tokoa.app.example.com` dikenali sebagai tenant `tokoa` |

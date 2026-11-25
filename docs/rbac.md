@@ -109,4 +109,4 @@ replica applies after at most the TTL. If you need instant effect across replica
 - A **suspended tenant** is stopped at login and refresh, but an access token that is already issued keeps working
   until it expires (15 minutes), because `Authorize` does not look at the tenant row.
 - An expired access token is answered with `unauthorized`, the same as an invalid one.
-- Deleting the group of a user leaves the user without permissions (not deleted).
+- A group that still has users cannot be deleted (409 `conflict`, `core.ErrInUse`). Users of a group that was removed some other way (database, older versions) have no permissions but are not deleted.

@@ -14,6 +14,7 @@ type Store interface {
 	List(ctx context.Context, p core.ListParams) (core.Page[Group], error)
 	Update(ctx context.Context, id string, fields map[string]any) error
 	Delete(ctx context.Context, id string) error
+	CountUsers(ctx context.Context, groupID string) (int64, error)
 }
 
 // Service holds the business rules of groups. The handler calls the service, the service calls the repository.
@@ -47,4 +48,17 @@ func (s *Service) Update(ctx context.Context, id string, fields map[string]any) 
 	return s.store.Update(ctx, id, fields)
 }
 
-func (s *Service) Delete(ctx context.Context, id string) error { return s.store.Delete(ctx, id) }
+// Delete removes a group that has no users. A group that still has users is refused with core.ErrInUse (409):
+// the users would be left without permissions, and the console would not know it. Move or delete them first.
+// The check and the delete run in the same request transaction; a user added in the very same moment is the
+// only case that slips through, and it ends up like any user of a deleted group (no permissions).
+func (s *Service) Delete(ctx context.Context, id string) error {
+	n, err := s.store.CountUsers(ctx, id)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		return core.ErrInUse
+	}
+	return s.store.Delete(ctx, id)
+}

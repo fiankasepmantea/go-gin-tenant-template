@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/fiankasepmantea/go-gin-tenant-template/internal/core"
@@ -10,6 +11,8 @@ import (
 type fakeStore struct {
 	created *Group
 	changed map[string]any
+	users   int64
+	deleted bool
 }
 
 func (f *fakeStore) Create(_ context.Context, e *Group) error { f.created = e; return nil }
@@ -23,7 +26,8 @@ func (f *fakeStore) Update(_ context.Context, _ string, fields map[string]any) e
 	f.changed = fields
 	return nil
 }
-func (f *fakeStore) Delete(context.Context, string) error { return nil }
+func (f *fakeStore) Delete(context.Context, string) error              { f.deleted = true; return nil }
+func (f *fakeStore) CountUsers(context.Context, string) (int64, error) { return f.users, nil }
 
 func TestService_TrimsTheName(t *testing.T) {
 	f := &fakeStore{}
@@ -45,5 +49,19 @@ func TestService_TrimsTheName(t *testing.T) {
 	}
 	if _, ok := f.changed["name"]; ok {
 		t.Fatal("a name appeared out of nowhere")
+	}
+}
+
+func TestService_DeleteRefusesAGroupWithUsers(t *testing.T) {
+	ctx := context.Background()
+
+	f := &fakeStore{users: 2}
+	if err := NewService(f).Delete(ctx, "id"); !errors.Is(err, core.ErrInUse) || f.deleted {
+		t.Fatalf("a group with users: err = %v, deleted = %v", err, f.deleted)
+	}
+
+	f = &fakeStore{}
+	if err := NewService(f).Delete(ctx, "id"); err != nil || !f.deleted {
+		t.Fatalf("an empty group: err = %v, deleted = %v", err, f.deleted)
 	}
 }

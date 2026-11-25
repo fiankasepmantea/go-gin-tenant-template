@@ -86,9 +86,12 @@ Failed logins are counted in fixed windows (`RATE_LIMIT_ATTEMPTS` per `RATE_LIMI
   which is correct only for one replica (a warning is logged in production).
 - If Redis is down the limiter **fails open**: logins keep working and the error is logged. It is a second line
   of defense, not the lock on the door.
-- `IP` is `c.ClientIP()`. Behind a proxy or load balancer configure Gin's trusted proxies, otherwise every
-  client has the address of the proxy (and shares one counter) or a client can choose its own address with
-  `X-Forwarded-For`.
+- `IP` is `c.ClientIP()`. By default the API trusts **no** proxy: the address is the one of the connection, and
+  `X-Forwarded-For` is ignored (a client cannot choose its own address). Behind a reverse proxy, load balancer or
+  the web console, set `TRUSTED_PROXIES` (comma separated IPs or CIDRs of those proxies, e.g.
+  `10.0.0.0/8,172.16.0.0/12`); then the address is taken from `X-Forwarded-For`. Without it every client behind
+  the proxy shares one counter. `0.0.0.0/0` is refused at startup. The proxy must overwrite `X-Forwarded-For`
+  (not append to a value from the client).
 - Refresh is not rate limited: its tokens are 256-bit random values.
 
 ## Password change and reset

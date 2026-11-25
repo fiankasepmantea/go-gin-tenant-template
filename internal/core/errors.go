@@ -15,6 +15,8 @@ var (
 	ErrConflict = errors.New("record already exists")
 	// ErrReference: a foreign key points to a record that does not exist (or is not visible to this tenant).
 	ErrReference = errors.New("referenced record does not exist")
+	// ErrInUse: the record cannot be deleted because other records still use it (for example a group with users).
+	ErrInUse = errors.New("record is in use")
 	// ErrInvalidInput: the database rejected a value (wrong type, NOT NULL, CHECK constraint).
 	ErrInvalidInput = errors.New("invalid value")
 	// ErrInvalidColumn: a column name used for filtering or sorting is not a plain identifier.

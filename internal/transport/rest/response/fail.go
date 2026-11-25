@@ -20,6 +20,7 @@ import (
 //	core.ErrNotFound                404 not_found
 //	core.ErrConflict                409 conflict
 //	core.ErrReference               422 validation_failed
+//	core.ErrInUse                   409 conflict ("still in use")
 //	core.ErrNoTenant                403 forbidden (a platform token on a tenant resource)
 //	other core.Err*                 400 invalid_request
 //	validation / JSON / body size   422 validation_failed, 400 invalid_request, 413 payload_too_large
@@ -42,6 +43,8 @@ func classify(err error, c *gin.Context) *Error {
 		return &Error{Code: CodeNotFound}
 	case errors.Is(err, core.ErrConflict):
 		return &Error{Code: CodeConflict}
+	case errors.Is(err, core.ErrInUse):
+		return &Error{Code: CodeConflict, Message: "The record is still in use and cannot be deleted."}
 	case errors.Is(err, core.ErrReference):
 		return &Error{Code: CodeValidationFailed, Message: "A referenced record does not exist."}
 	case errors.Is(err, core.ErrNoTenant):
